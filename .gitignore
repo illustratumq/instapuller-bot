@@ -1,0 +1,28 @@
+# Cache
+__pycache__/
+
+# Keys/Certs/Sessions/Storages and similar
+*.pem
+*.session
+*.rdb
+*.exe
+*.pkl
+
+# Environments
+.env
+*env/
+*venv/
+*ENV/
+*VENV/
+
+# IDE
+.idea/
+
+# Other
+redisdata/
+pgdata/
+pyrightconfig.json
+app/instagram/download
+app/instagram/cookies
+app/instagram/screenshots
+

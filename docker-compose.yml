@@ -1,0 +1,88 @@
+version: "3.7"
+
+services:
+  bot:
+    container_name: "${BOT_NAME}-bot"
+    build:
+      context: .
+    stop_signal: SIGINT
+    volumes:
+    - app/instagram/download:/src/app/instagram/download
+    - app/instagram/cookies:/src/app/instagram/cookies
+    - app/instagram/screenshots:src/app/instagram/screenshots
+    command: python -O bot.py
+    restart: unless-stopped
+    env_file:
+      - ".env"
+    environment:
+      DB_HOST: database
+      REDIS_HOST: redis
+    depends_on:
+      - database
+      - redis
+      - selenoid
+    networks:
+      - botnet
+
+  redis:
+    container_name: "${BOT_NAME}-redis"
+    image: redis:7-alpine
+    env_file:
+      - ".env"
+    ports:
+      - "6377:6379"
+    volumes:
+      - ./redisdata:/var/lib/redis
+    restart: unless-stopped
+    networks:
+      - botnet
+
+  database:
+    container_name: "${BOT_NAME}-database"
+    image: postgres:14-alpine
+    ports:
+      - "${DB_PORT}:${DB_PORT}"
+    restart: unless-stopped
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    command: "postgres -c max_connections=150 -c shared_buffers=512MB -c effective_cache_size=1536MB
+              -c maintenance_work_mem=128MB -c checkpoint_completion_target=0.9 -c wal_buffers=16MB
+              -c default_statistics_target=100 -c random_page_cost=1.1 -c effective_io_concurrency=200
+              -c work_mem=3495kB -c min_wal_size=1GB -c max_wal_size=4GB -c max_worker_processes=2
+              -c max_parallel_workers_per_gather=1 -c max_parallel_workers=2 -c max_parallel_maintenance_workers=1"
+    env_file:
+      - ".env"
+    depends_on:
+      - redis
+    environment:
+      POSTGRES_USER: $DB_USER
+      POSTGRES_PASSWORD: $DB_PASS
+      POSTGRES_DB: $DB_NAME
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200k"
+        max-file: "10"
+    networks:
+      - botnet
+
+  selenoid:
+    image: aerokube/selenoid:latest-release
+    networks:
+      - botnet
+    ports:
+      - "4444-4448:4444"
+    restart: always
+    volumes:
+      - "./selenoid:/src/selenoid"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "./selenoid/video:/src/selenoid/video"
+      - "./selenoid/logs:/src/selenoid/logs"
+    command: [ "-conf", "/src/selenoid/browsers.json", "-video-output-dir",
+               "/opt/selenoid/video", "-log-output-dir", "/opt/selenoid/logs", "-container-network", "botnet" ]
+
+
+networks:
+  botnet:
+    name: botnet
+    driver: bridge

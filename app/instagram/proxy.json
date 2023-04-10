@@ -1,0 +1,12 @@
+{
+    "b1.getproxy.link;2005": {
+        "proxy_string": "b1.getproxy.link;2005;socks5;http://v1.getproxy.link:3001/api/rotate?key=fdf92be9-91a5-4dcd-984c-2797f8c8b99f",
+        "status": "ok",
+        "create_date": 1676893351.099527,
+        "update_date": 1681127871.389858,
+        "last_using": 1679180049.397144,
+        "free_actions": 10,
+        "total_actions": 10,
+        "stop_time": 1681060897.795687
+    }
+}
