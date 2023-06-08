@@ -11,11 +11,14 @@ from app.handlers.private.posting import posting_cmd, select_executor_work, data
     select_work_mode
 from app.handlers.private.start import start_cmd
 from app.handlers.private.statistic import statistic_cmd
+from app.handlers.private.techniclas import technicals_cmd
+from app.instagram.proxy import ProxyController
 from app.keyboard.inline.back import back_cb
 
 
 async def back_cmd(call: CallbackQuery, callback_data: dict, config: Config, state: FSMContext,
-                   user_db: UserRepo, account_db: AccountRepo, work_db: WorkRepo, post_db: PostRepo):
+                   user_db: UserRepo, account_db: AccountRepo, work_db: WorkRepo, post_db: PostRepo,
+                   controller: ProxyController):
     action = callback_data['action']
     msg = call.message
     if action == 'start':
@@ -36,8 +39,9 @@ async def back_cmd(call: CallbackQuery, callback_data: dict, config: Config, sta
     elif action == 'statistic':
         await statistic_cmd(call, callback_data, account_db, post_db)
     elif action == 'admin':
-        await admin_cmd(call, account_db, post_db)
-
+        await admin_cmd(call, account_db, post_db, user_db, controller)
+    elif action == 'tech':
+        await technicals_cmd(call, callback_data, account_db)
 
 
 def setup(dp: Dispatcher):

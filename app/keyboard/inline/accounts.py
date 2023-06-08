@@ -67,13 +67,10 @@ def customers_kb(customers: list[Account], account: Account, dev: bool = False, 
             InlineKeyboardButton('➡', callback_data=next_btn_cb)
         ]
     ]
-    return InlineKeyboardMarkup(
-        row_width=3,
-        inline_keyboard=inline_keyboard+navigate_keyboard
-    )
+    return InlineKeyboardMarkup(inline_keyboard=inline_keyboard + navigate_keyboard)
 
 
-def customer_settings_cb(account: Account):
+def customer_settings_cb(account: Account, account_type: str = 'posting'):
 
     def button_cb(action: str):
         return account_cb.new(account_id=account.account_id, type='posting', action=action)
@@ -92,12 +89,44 @@ def customer_settings_cb(account: Account):
             action_btn,
             InlineKeyboardButton(Buttons.accounts.delete, callback_data=button_cb('delete'))
         ],
-        [back_button(action='posting', account_id=account.account_id)]
+        [back_button(action=account_type, account_id=account.account_id)]
     ]
     return InlineKeyboardMarkup(
         row_width=2,
         inline_keyboard=inline_keyboard
     )
+
+
+def technicals_kb(technicals: list[Account], account: Account):
+    technicals.sort(key=lambda acc: acc.created_at)
+    ids = [technical.account_id for technical in technicals]
+    next_btn_cb = account_cb.new(account_id=switch(ids, account.account_id, Switch.Next), type='tech', action='pag')
+    prev_btn_cb = account_cb.new(account_id=switch(ids, account.account_id, Switch.Prev), type='tech', action='pag')
+
+    def button_cb(action: str):
+        return account_cb.new(account_id=account.account_id, type='tech', action=action)
+
+    inline_keyboard = [
+        [
+            InlineKeyboardButton(Buttons.menu.add_account, callback_data=menu_cb.new(action=f'add_tech')),
+            InlineKeyboardButton(Buttons.accounts.delete, callback_data=button_cb('delete'))
+        ]
+    ]
+
+    if account.status == AccountStatusEnum.BANNED:
+        inline_keyboard = [
+            [InlineKeyboardButton(Buttons.accounts.login_data, callback_data=button_cb('login_data'))],
+            [InlineKeyboardButton(Buttons.accounts.refresh_status, callback_data=button_cb('conf_resume'))], []
+        ]
+
+    navigate_keyboard = [
+        [
+            InlineKeyboardButton('⬅', callback_data=prev_btn_cb),
+            back_button(Buttons.accounts.back, action='admin', account_id=account.account_id),
+            InlineKeyboardButton('➡', callback_data=next_btn_cb)
+        ]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=inline_keyboard + navigate_keyboard)
 
 
 def executor_kb(executors: list[Account], account: Account):

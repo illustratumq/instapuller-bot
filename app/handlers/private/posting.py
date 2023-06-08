@@ -56,6 +56,7 @@ async def posting_cmd(call: CallbackQuery, callback_data: dict, config: Config, 
 async def posting_setting_cmd(call: CallbackQuery, callback_data: dict, account_db: AccountRepo):
     customer_id = int(callback_data['account_id'])
     customer = await account_db.get_account(customer_id)
+    account_type = 'posting' if customer.type == AccountTypeEnum.POSTING else 'tech'
     text = (
         f'🗂 [Для публікації | {Buttons.accounts.settings}]\n\n'
         f'Тут ви можете налаштувати роботу вашого акаунту <b>{customer.username}.</b>\n\n'
@@ -64,7 +65,7 @@ async def posting_setting_cmd(call: CallbackQuery, callback_data: dict, account_
         f'Зупинити або запустити. Для зупинки або відновлення публікацій постів на акаунті\n\n'
         f'Видатити. Для видалення акаунта і прив\'язаних постів'
     )
-    await call.message.edit_text(text, reply_markup=customer_settings_cb(customer))
+    await call.message.edit_text(text, reply_markup=customer_settings_cb(customer, account_type))
 
 
 async def developer_settings(call: CallbackQuery, callback_data: dict, account_db: AccountRepo,
@@ -207,7 +208,7 @@ async def resume_cmd(call: CallbackQuery, callback_data: dict, account_db: Accou
     customer = await account_db.get_account(customer_id)
     await account_db.update_account(customer_id, status=AccountStatusEnum.ACTIVE)
     text = (
-        f'Ви відновили публікацію постів для вашого акаунту {customer.username} ✔'
+        f'Ви відновили ваш акаунт {customer.username} ✔'
     )
     await call.answer(text, show_alert=True)
     await posting_setting_cmd(call, callback_data, account_db)
@@ -217,7 +218,9 @@ async def select_executor_work(call: CallbackQuery, callback_data: dict, account
     await state.finish()
     customer_id = int(callback_data['account_id'])
     customer = await account_db.get_account(customer_id)
-    executors = await account_db.get_accounts_by_user(call.from_user.id, AccountTypeEnum.PARSING)
+    data = await state.get_data()
+    user_id = data['user_id'] if 'user_id' in data.keys() else call.from_user.id
+    executors = await account_db.get_accounts_by_user(user_id, AccountTypeEnum.PARSING)
     text = (
         f'🗂 [Для публікації | {Buttons.accounts.add_work}]\n\n'
         f'Додайте завдання для вашого акаунту <b>{customer.username}</b>\n\n'
@@ -453,7 +456,8 @@ def setup(dp: Dispatcher):
     dp.register_callback_query_handler(resume_cmd, account_cb.filter(action='conf_resume'), state='*')
     dp.register_callback_query_handler(pause_cmd, account_cb.filter(action='conf_pause'), state='*')
 
-    dp.register_callback_query_handler(confirm_delete_cmd, account_cb.filter(action='delete'), state='*')
+    dp.register_callback_query_handler(confirm_delete_cmd, account_cb.filter(action='delete', type='posting'),
+                                       state='*')
     dp.register_callback_query_handler(delete_account_cmd, account_cb.filter(action='conf_delete'), state='*')
 
     dp.register_callback_query_handler(posting_setting_cmd, account_cb.filter(action='settings'), state='*')

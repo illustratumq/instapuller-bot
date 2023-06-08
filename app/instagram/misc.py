@@ -22,7 +22,7 @@ def run_time(next_run_time: datetime):
     return dict(trigger='date', next_run_time=next_run_time, misfire_grace_time=300)
 
 
-def interval(delay: int = 0, minutes: float = 0):
+def interval(delay: int = 0, minutes: float = 1):
     return dict(trigger='interval', seconds=int(minutes*60+delay), max_instances=2, misfire_grace_time=300)
 
 

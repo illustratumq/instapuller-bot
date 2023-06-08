@@ -42,23 +42,33 @@ class ProxyController:
         return answer
 
     @staticmethod
-    def get_working_proxy():
+    def get_working_proxy(executor_type: str = 'default'):
         worked_proxies = []
         writer = JsonWrapper('app/instagram/proxy.json')
         for proxy in writer.list():
             worked_proxies.append(writer.get(proxy))
-        worked_proxies.sort(key=lambda data: int(data['free_actions']), reverse=True)
+        worked_proxies.sort(key=lambda data: now().fromtimestamp(data['last_using']))
         for proxy_data in worked_proxies:
             status = proxy_data['status']
             proxy_string = proxy_data['proxy_string']
+            type_ = proxy_data['type']
             host, port, proxy_type, reboot_url = proxy_string.split(';')
             if status == 'ok':
-                key = f'{host};{port}'
-                if not ProxyController.check_proxy(proxy_string):
-                    ProxyController.update(key, status='not valid', stop_time=now().timestamp())
-                    log.warning(proxy_string, 'not valid')
+                if executor_type == 'default':
+                    key = f'{host};{port}'
+                    if not ProxyController.check_proxy(proxy_string):
+                        ProxyController.update(key, status='not valid', stop_time=now().timestamp())
+                        log.warning(proxy_string + ' not valid')
+                    else:
+                        return proxy_string
                 else:
-                    return proxy_string
+                    if type_ == executor_type:
+                        key = f'{host};{port}'
+                        if not ProxyController.check_proxy(proxy_string):
+                            ProxyController.update(key, status='not valid', stop_time=now().timestamp())
+                            log.warning(proxy_string + ' not valid')
+                        else:
+                            return proxy_string
 
     @staticmethod
     def recheck_proxies():
@@ -95,11 +105,12 @@ class ProxyController:
         key = f'{host};{port}'
         try:
             response = requests.get(reboot_url, timeout=10)
-            if (response.json())['status'] == 'ok':
-                log.info(f'Reboot proxy {key}')
+            if response.json()['status']:
+                log.warning(f'Reboot proxy {key} status ok')
                 time.sleep(10)
                 ProxyController.update(key)
         except requests.exceptions.ConnectionError:
+            log.error(f'Reboot proxy {key} status: bad')
             return False
         except requests.exceptions.ContentDecodingError:
             log.error('Помилка при зчитуванні відповіді JSON')
@@ -110,7 +121,7 @@ class ProxyController:
         try:
             proxy_url = f'{proxy_type}://{host}:{port}'
             proxies = dict(http=proxy_url, https=proxy_url)
-            requests.get('https://ipinfo.io/json', proxies=proxies, timeout=5)
+            data = requests.get('https://ipinfo.io/json', proxies=proxies, timeout=5)
             return True
         except requests.exceptions.ConnectionError:
             return False
@@ -143,5 +154,4 @@ class ProxyController:
                 )
             }
         )
-
 

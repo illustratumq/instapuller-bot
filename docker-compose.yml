@@ -7,9 +7,9 @@ services:
       context: .
     stop_signal: SIGINT
     volumes:
-    - app/instagram/download:/src/app/instagram/download
-    - app/instagram/cookies:/src/app/instagram/cookies
-    - app/instagram/screenshots:src/app/instagram/screenshots
+    - ./app/instagram/download:/src/app/instagram/download
+    - ./app/instagram/cookies:/src/app/instagram/cookies
+    - ./app/instagram/screenshots:/src/app/instagram/screenshots
     command: python -O bot.py
     restart: unless-stopped
     env_file:

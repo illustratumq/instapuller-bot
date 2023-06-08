@@ -34,7 +34,7 @@ class Post(TimedBaseModel):
         download = False
         if self.post_id in os.listdir(config.misc.download_path):
             media_count = len(os.listdir(Path(config.misc.download_path, self.post_id)))
-            if media_count != 0 and media_count == self.mediacount:
+            if media_count != 0:
                 download = True
         return download
 

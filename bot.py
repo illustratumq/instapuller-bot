@@ -3,7 +3,7 @@ import logging
 
 import betterlogging as bl
 from aiogram import Bot, Dispatcher
-from aiogram.contrib.fsm_storage.redis import RedisStorage2
+from aiogram.contrib.fsm_storage.redis import RedisStorage2, RedisStorage
 from aiogram.types import AllowedUpdates, ParseMode
 
 from app import filters, handlers, middlewares
@@ -44,7 +44,7 @@ async def main():
         scheduler=scheduler,
         controller=ProxyController()
     )
-    ProxyController().recheck_proxies()
+    # ProxyController().recheck_proxies()
 
     middlewares.setup(dp, environments, sqlalchemy_session_pool)
     filters.setup(dp)
@@ -55,7 +55,7 @@ async def main():
     await notify(bot, config)
 
     # await setup_executors(scheduler, ProxyController())
-    # await test(scheduler, sqlalchemy_session_pool)
+    await test(scheduler, sqlalchemy_session_pool, ProxyController())
 
     try:
         scheduler.start()

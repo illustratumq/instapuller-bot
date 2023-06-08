@@ -58,15 +58,15 @@ async def checking_instagram_username_parsing(call: CallbackQuery, state: FSMCon
                                               scheduler: ContextSchedulerDecorator, config: Config,
                                               controller: ProxyController):
     await call.message.delete()
-    # proxy = controller.get_working_proxy()
-    # if not proxy:
-    #     text = (
-    #         'Нажаль ми не можемо перевірити ваш акаунт на дійсність через тимчасову проблему '
-    #         'з нашими проксі-серверами. Будь ласка зверністья в підтримку, або спробуйте пізніше'
-    #     )
-    #     await call.message.answer_sticker(config.misc.error_sticker_id)
-    #     return await call.message.answer(text)
-    proxy = None
+    proxy = controller.get_working_proxy('register')
+    if not proxy:
+        text = (
+            'Нажаль ми не можемо перевірити ваш акаунт на дійсність через тимчасову проблему '
+            'з нашими проксі-серверами. Будь ласка зверністья в підтримку, або спробуйте пізніше'
+        )
+        await call.message.answer_sticker(config.misc.error_sticker_id)
+        return await call.message.answer(text)
+    proxy = controller.get_working_proxy('register')  # TODO
     data = await state.get_data()
     username = data['username']
     customers = await account_db.get_accounts_by_user(call.from_user.id, AccountTypeEnum.POSTING)
@@ -232,15 +232,15 @@ async def checking_instagram_login_posting(call: CallbackQuery, state: FSMContex
     data = await state.get_data()
     if scheduler.get_job(data['job_id']):
         scheduler.get_job(data['job_id']).remove()
-    # proxy = controller.get_working_proxy()
-    # if not proxy:
-    #     text = (
-    #         'Нажаль ми не можемо перевірити ваш акаунт на дійсність через тимчасову проблему '
-    #         'з нашими проксі-серверами. Будь ласка зверністья в підтримку, або спробуйте пізніше'
-    #     )
-    #     await call.message.answer_sticker(config.misc.error_sticker_id)
-    #     return await call.message.answer(text)
-    proxy = None
+    proxy = controller.get_working_proxy('register')
+    if not proxy:
+        text = (
+            'Нажаль ми не можемо перевірити ваш акаунт на дійсність через тимчасову проблему '
+            'з нашими проксі-серверами. Будь ласка зверністья в підтримку, або спробуйте пізніше'
+        )
+        await call.message.answer_sticker(config.misc.error_sticker_id)
+        return await call.message.answer(text)
+    proxy = controller.get_working_proxy('register')  # TODO
     username = data['username']
     password = data['password']
     auth_key = data['auth_key']

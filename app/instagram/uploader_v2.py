@@ -1,4 +1,3 @@
-import concurrent.futures
 import json
 import logging
 import os
@@ -21,9 +20,9 @@ from sqlalchemy.orm import sessionmaker
 from app.config import Config
 from app.database.models import Account
 from app.database.models import Work, Post
-from app.database.services.enums import AccountStatusEnum, AccountTypeEnum, WorkModeEnum, WorkStatusEnum, PostStatusEnum
+from app.database.services.enums import WorkModeEnum, WorkStatusEnum, PostStatusEnum
 from app.instagram.misc import date
-from app.instagram.misc import send_message, update_account, update_work, add_posts, delete_post, update_post
+from app.instagram.misc import send_message, update_work, add_posts, delete_post, update_post
 from app.instagram.proxy import ProxyController
 from app.misc.times import now
 
@@ -41,28 +40,17 @@ class Device:
 
 @dataclass
 class Button:
-    # login: tuple = 'xpath', '//*[@id="loginForm"]/div/div[1]/div/label/input'
-    # password: tuple = 'xpath', '//*[@id="loginForm"]/div/div[2]/div/label/input'
     entry: tuple = 'xpath', '//*[@id="loginForm"]/div/div[3]/button'
     accept_cookies: tuple = 'xpath', '//button[contains(text(), "Not Now")]'
-    # save_session: tuple = 'xpath', '//*[@id="react-root"]/section/main/div/div/div/div/button'
-    # new_media: str = 'xpath', '//button[contains(text(), "New post")]'
     select_file: tuple = 'xpath', "//*[contains(text(), 'Select from computer')]"
     input: tuple = 'tag name', 'input'
     next: tuple = 'xpath', '//button[contains(text(), "Next")]'
-    # caption: tuple = 'tag name', 'textarea'
     share: tuple = 'xpath', '//button[contains(text(), "Share")]'
     security: tuple = 'css selector', "[aria-label='Security Code']"
     confirm: tuple = 'xpath', "//*[contains(text(), 'Confirm')]"
-    # media_count: tuple = 'xpath', '/html/body/div[1]/div/div/div/div[1]/div/div/div/div[1]/section' \
-    #                               '/main/div/header/section/ul/li[1]/div/span'
     post_count: tuple = 'class name', '_ac2a'
     create = 'xpath', "//*[contains(text(), 'Create')]"
-    # new_post = 'xpath', "//*[contains(text(), 'New post')]"
     error: tuple = 'xpath', '//*[@id="slfErrorAlert"]'
-    # not_profile: tuple = 'xpath', '/html/body/div[2]/div/div/div/div[1]/div/div/div/div[1]/div[1]/div[2]/section/main/div/div/div/h2'
-    #
-    #
     scroll: str = 'window.scrollTo(0, document.body.scrollHeight);'
     query_hash: str = '2b0673e0dc4580674a88d426fe00ea90'
     images = {'name': 'div', 'class_': '_aagu _aato'}
@@ -97,7 +85,8 @@ class InstagramController:
 
     def set_browser(self):
         if Device.current() == Device.WINDOWS:
-            self.browser = webdriver.Chrome(**self.windows_options())
+            self.browser = webdriver.Chrome(**self.windows_options(), executable_path='../../chromedriver.exe')
+            time.sleep(10)
             self.browser.get('https://ipinfo.io/json')
             time.sleep(1)
         else:
@@ -117,6 +106,7 @@ class InstagramController:
         options.add_argument('--disable-blink-features=AutomationControlled')
         options.add_experimental_option('excludeSwitches', ['enable-logging'])
         options.add_experimental_option('excludeSwitches', ['enable-automation'])
+        options.add_argument('--disable-gpu')
         result = dict(options=options)
         desired_capabilities = {
             'browserName': 'chrome',
@@ -126,6 +116,8 @@ class InstagramController:
 
         if isinstance(self.proxy, str):
             ProxyController.use_proxy(self.proxy)
+            ProxyController.reboot_proxy(self.proxy)
+            time.sleep(10)
             host, port, proxy_type, url = self.proxy.split(';')
             proxy_config = dict(proxyType='MANUAL')
             proxy_string = f'{host}:{port}'
@@ -289,7 +281,8 @@ class InstagramController:
     def login(self, account: Account, scheduler: ContextSchedulerDecorator,
               successful_end_func=None, error_end_func=None, kwargs: dict = None) -> webdriver.Chrome:
         screenshot = self.screen_path.format(account.username, now().strftime(self.format_time))
-        try:
+        # try:
+        if True:
             for attempt in (1, 2):
                 log.info(f'Логін в {account.username}. Спроба {attempt}/2')
                 self.set_browser()
@@ -309,7 +302,8 @@ class InstagramController:
                     if not self.is_exist(*self.button.create) and self.get_button(browser, 'New post') is None:
                         pass
                     else:
-                        os.remove(screenshot)
+                        if os.path.isfile(screenshot):
+                            os.remove(screenshot)
                         if successful_end_func:
                             scheduler.add_job(successful_end_func, **date(), kwargs=kwargs)
                         return browser
@@ -348,29 +342,31 @@ class InstagramController:
                 if successful_end_func:
                     scheduler.add_job(successful_end_func, **date(), kwargs=kwargs)
                 return browser
-        except Exception as Error:
-            error = self.error_to_html(Error)
-            text = (
-                f'#ПомилкаВходуІнстаграм\n\n'
-                f'Я не зміг увійтив ваш акаунт <b>{account.username}</b>\n\n<code>{error}</code>'
-            )
-            if self.browser:
-                self.browser.close()
-            if account.type == AccountTypeEnum.TECHNICAL:
-                user_id = self.config.misc.error_channel_id
-            else:
-                user_id = [account.user_id, self.config.misc.error_channel_id]
-            scheduler.add_job(
-                name=f'Відправка повідомлення про помилку при вході в {account.username}', func=send_message, **date(),
-                kwargs=dict(user_id=user_id, text=text,
-                            screenshot=screenshot)
-            )
-            scheduler.add_job(
-                name=f'Оновлення статусту акаунту на "Забанений"', func=update_account, **date(),
-                kwargs=dict(account=account, params=dict(status=AccountStatusEnum.BANNED))
-            )
-            if error_end_func:
-                scheduler.add_job(error_end_func, **date(6), kwargs=kwargs)
+        # except Exception as Error:
+        #     self.close(self.browser)
+        #     error = self.error_to_html(Error)
+        #     if 'session timed out or not found' in error:
+        #         pass
+        #     else:
+        #         text = (
+        #             f'#ПомилкаВходуІнстаграм\n\n'
+        #             f'Я не зміг увійтив ваш акаунт <b>{account.username}</b>\n\n<code>{error}</code>'
+        #         )
+        #         if account.type == AccountTypeEnum.TECHNICAL:
+        #             user_id = self.config.misc.error_channel_id
+        #         else:
+        #             user_id = [account.user_id, self.config.misc.error_channel_id]
+        #         scheduler.add_job(
+        #             name=f'Відправка повідомлення про помилку при вході в {account.username}', func=send_message, **date(),
+        #             kwargs=dict(user_id=user_id, text=text,
+        #                         screenshot=screenshot)
+        #         )
+        #         scheduler.add_job(
+        #             name=f'Оновлення статусту акаунту на "Забанений"', func=update_account, **date(),
+        #             kwargs=dict(account=account, params=dict(status=AccountStatusEnum.BANNED))
+        #         )
+        #         if error_end_func:
+        #             scheduler.add_job(error_end_func, **date(6), kwargs=kwargs)
 
     def check_parsing_account(self, technicals: list[Account], username: str, scheduler: ContextSchedulerDecorator,
                               successful_end_func=None, error_end_func=None, kwargs: dict = None):
@@ -408,7 +404,14 @@ class InstagramController:
                     browser.get(self.profile_url.format(executor.username))
                     time.sleep(5)
                     browser.implicitly_wait(5)
-                    current_media_count = int(browser.find_elements(*self.button.post_count)[0].text.replace(',', ''))
+                    try:
+                        current_media_count = int(browser.find_elements(*self.button.post_count)[0].text.replace(',', ''))
+                    except IndexError:
+                        error_msg = (
+                            f'Не можливо спарсити к-ть медія на сторінці акаунту. Перевірте '
+                            f'чи він існує в Інстаграм.'
+                        )
+                        raise ErrorLoginInstagram(error_msg)
                     browser.save_screenshot(screenshot)
 
                     limit = 0
@@ -421,7 +424,7 @@ class InstagramController:
                         update_work_kwargs.update(status=WorkStatusEnum.ACTIVE)
                         if work.mediacount != 0 and current_media_count > work.mediacount:
                             limit = current_media_count - work.mediacount
-                    else:
+                    elif work.mode == WorkModeEnum.ALL_AND_NEW:
                         update_work_kwargs.update(mediacount=current_media_count, status=WorkStatusEnum.ACTIVE,
                                                   mode=WorkModeEnum.ONLY_NEW)
                         limit = current_media_count
@@ -460,7 +463,8 @@ class InstagramController:
 
                         if page_load_attempt == 5:
                             return
-                    os.remove(screenshot)
+                    if os.path.isfile(screenshot):
+                        os.remove(screenshot)
                     scheduler.add_job(
                         name=f'Оновлюю роботу для {executor.username}', func=update_work, **date(),
                         kwargs=dict(work=work, params=update_work_kwargs))
@@ -470,7 +474,7 @@ class InstagramController:
                     error = self.error_to_html(Error)
                     text = (
                         '#ПомилкаРеєстраціїПостів\n\n'
-                        f'Не зміг зареєструвати пости на акаунті {executor.username}\n\n<code>{error}</code>'
+                        f'Не зміг зареєструвати пости на акаунті {executor.username} {executor.user_id=}\n\n<code>{error}</code>'
                     )
                     scheduler.add_job(
                         send_message, **date(), kwargs=dict(user_id=self.config.misc.error_channel_id,
@@ -499,6 +503,21 @@ class InstagramController:
             log.warning(f'Помилка при копіюванні caption:\n{Error}\n')
             return False
 
+    @staticmethod
+    def close(browser: webdriver.Chrome):
+        try:
+            browser.close()
+        except:
+            pass
+
+    @staticmethod
+    def get_post_next_media_button(browser: webdriver.Chrome):
+        try:
+            window = browser.find_element('class name', '_aao_')
+            return window.find_element('class name', '_9zm2')
+        except NoSuchElementException:
+            return False
+
     def download_post(self, technicals: list[Account], post: Post, scheduler: ContextSchedulerDecorator):
         for technical in technicals:
             screenshot = self.screen_path.format(technical.username, now().strftime(self.format_time))
@@ -519,15 +538,14 @@ class InstagramController:
                     next_button = True
                     soup = BeautifulSoup(browser.page_source, 'lxml')
                     is_video_exist = False
-                    while next_button is not None:
-                        next_button = self.get_button(browser, 'Next')
-                        if next_button:
-                            browser.execute_script('arguments[0].click();', next_button)
-                        time.sleep(3)
+                    while next_button:
                         browser.implicitly_wait(3)
-                        images = soup.find_all(**self.button.images_closed)
-                        images += soup.find_all(**self.button.images)
-                        logging.info(f'Count images: {len(images)}')
+                        presentation = soup.find('div', class_='_aap0')
+                        if presentation:
+                            images = presentation.find_all('div', class_='_aagv')
+                        else:
+                            images = soup.find_all('div', class_='_aagv')[:1]
+                        logging.info(f'Count media: {len(pre_media)}')
                         videos = soup.find_all(**self.button.videos)
                         if len(images) > 0:
                             for image in images:
@@ -540,6 +558,12 @@ class InstagramController:
                         soup = BeautifulSoup(browser.page_source, 'lxml')
                         if self.is_video_exist(soup):
                             is_video_exist = True
+                            break
+                        next_button = self.get_post_next_media_button(browser)
+                        if next_button:
+                            browser.execute_script('arguments[0].click();', next_button)
+                        time.sleep(3)
+
                     browser.save_screenshot(screenshot)
                     caption = self.get_caption(soup)
                     media = []
@@ -554,10 +578,10 @@ class InstagramController:
                         if response['status'] == 'fail':
                             pass
                         else:
-                            if not caption:
-                                # caption = response['data']['shortcode_media']['edge_media_to_caption']['edges']
-                                # caption = caption[0]['node']['text'] if caption else ''
-                                pass
+                            # if not caption:
+                            #   caption = response['data']['shortcode_media']['edge_media_to_caption']['edges']
+                            #   caption = caption[0]['node']['text'] if caption else ''
+                            #   pass
                             if is_video_exist:
                                 response = response['data']['shortcode_media']
                                 if 'edge_sidecar_to_children' not in list(response.keys()):
@@ -572,17 +596,21 @@ class InstagramController:
                                             media.append(dict(content_type='video', url=node['video_url'], count=count))
                                         else:
                                             media.append(
-                                                dict(content_type='photo', url=node['display_resources'][-1]['src'], count=count))
+                                                dict(content_type='photo', url=node['display_resources'][-1]['src'],
+                                                     count=count))
                                         count += 1
                     else:
                         for content in pre_media:
-                            content = content.find_all(**self.button.image)[0].find_all('img')[0].get('src')
+                            content = content.find_all('img')[0].get('src')
                             media.append(dict(content_type='photo', url=content, count=count))
                             count += 1
-                    os.remove(screenshot)
+                    if os.path.isfile(screenshot):
+                        os.remove(screenshot)
+                    self.close(browser)
                     self.download_media_list(media, caption, post, scheduler)
                     return
                 except Exception as Error:
+                    self.close(browser)
                     error = self.error_to_html(Error)
                     scheduler.add_job(
                         update_post, **date(), kwargs=dict(post=post, params=dict(status=PostStatusEnum.ACTIVE))
@@ -638,10 +666,24 @@ class InstagramController:
         action.perform()
         time.sleep(2)
 
+    def check_post_shared_as_reels(self, browser: webdriver.Chrome):
+        info = self.get_element_by_name(browser, 'OK', 'button')
+        time.sleep(5)
+        if info:
+            log.info(str(info))
+            action = ActionChains(browser)
+            action.move_to_element(info)
+            action.click()
+            action.perform()
+            time.sleep(2)
+            browser.implicitly_wait(10)
+
     def upload(self, customer: Account, post: Post, scheduler: ContextSchedulerDecorator):
         screenshot = self.screen_path.format(customer.username, now().strftime(self.format_time))
-        try:
-            browser = self.login(customer, scheduler)
+        button_name = 'default'
+        browser = self.login(customer, scheduler)
+        # try:
+        if True:
             if not browser:
                 raise ErrorLoginInstagram(f'Не зміг увійти в акаунт {customer.username}')
             media_group = post.get_post_files(self.config)
@@ -657,20 +699,25 @@ class InstagramController:
             upload = browser.find_elements(*self.button.input)[-1]
             upload.send_keys(media_group[0])
             time.sleep(3)
+            self.check_post_shared_as_reels(browser)
             browser.implicitly_wait(10)
             crop = self.get_element_by_name(browser, 'Select crop', tag='button')
+            button_name = 'crop'
             browser.execute_script('arguments[0].click();', crop)
             time.sleep(2)
             browser.implicitly_wait(10)
             original = self.get_element_by_name(browser, 'Original', tag='button')
+            button_name = 'original'
             browser.execute_script('arguments[0].click();', original)
             time.sleep(2)
             browser.execute_script('arguments[0].click();', crop)
             time.sleep(2)
             browser.save_screenshot(screenshot)
+            self.check_post_shared_as_reels(browser)
             if len(media_group) > 1:
                 for media in media_group[1:]:
                     b = self.get_element_by_name(browser, 'Open media gallery', tag='button')
+                    button_name = 'open media gallery'
                     browser.execute_script('arguments[0].click();', b)
                     time.sleep(2)
                     browser.find_element(
@@ -678,25 +725,33 @@ class InstagramController:
                         '[accept="image/jpeg,image/png,image/heic,image/heif,video/mp4,video/quicktime"]'
                     ).send_keys(media)
                     browser.save_screenshot(screenshot)
-                    time.sleep(2)
+                    time.sleep(5)
+                    self.check_post_shared_as_reels(browser)
                     right = self.get_element_by_name(browser, 'Right chevron', tag='button')
+                    button_name = 'right chevron'
                     browser.execute_script('arguments[0].click();', right)
                     time.sleep(2)
+                    button_name = 'Open media gallery NEXT'
                     browser.execute_script('arguments[0].click();', b)
                     time.sleep(2)
                     browser.implicitly_wait(10)
+                    self.check_post_shared_as_reels(browser)
             browser.save_screenshot(screenshot)
-            info = self.get_button(browser, 'OK')
-            time.sleep(5)
-            if info:
-                info.send_keys(Keys.ENTER)
+            self.check_post_shared_as_reels(browser)
+            if len(browser.window_handles) > 1:
                 time.sleep(2)
-                browser.implicitly_wait(10)
+                browser.switch_to.window(browser.window_handles[-1])
+                browser.close()
+                browser.switch_to.window(browser.window_handles[0])
+                time.sleep(2)
+            browser.save_screenshot(screenshot)
             for i in range(2):
                 next_button = self.get_element_by_name(browser, 'Next', tag='div', reverse=True)
                 browser.execute_script('arguments[0].click();', next_button)
+                button_name = 'next'
                 time.sleep(5)
                 browser.implicitly_wait(10)
+                browser.save_screenshot(screenshot)
             if post.caption is not None:
                 caption_textarea = self.get_element_by_name(browser, 'Write a caption...', tag='textarea')
                 caption_div = self.get_element_by_name(browser, 'Write a caption...', tag='div')
@@ -708,46 +763,50 @@ class InstagramController:
                     except:
                         pass
             time.sleep(1)
-            click_area = self.get_element_by_name(browser, 'Create new post', tag='div', text=True, reverse=True)
+            click_area_post = self.get_element_by_name(browser, 'Create new post', tag='div', text=True, reverse=True)
+            click_area_reel = self.get_element_by_name(browser, 'New reel', tag='div', text=True, reverse=True)
+            click_area = click_area_post if click_area_post else click_area_reel
             action = ActionChains(browser)
             action.move_to_element(click_area)
             action.click(on_element=click_area)
             action.perform()
             time.sleep(2)
             share_button = self.get_element_by_name(browser, 'Share', tag='div', reverse=True)
+            button_name = 'share button'
             browser.execute_script('arguments[0].click();', share_button)
             time.sleep(2)
-            browser.close()
-            os.remove(screenshot)
+            self.close(browser)
+            if os.path.isfile(screenshot):
+                os.remove(screenshot)
             scheduler.add_job(update_post, **date(), kwargs=dict(
                 post=post, params=dict(status=PostStatusEnum.DONE)
             ))
             post.delete_me(self.config)
-        except Exception as Error:
-            error = self.error_to_html(Error)
-            scheduler.add_job(update_post, **date(), kwargs=dict(
-                post=post, params=dict(status=PostStatusEnum.PLAN_PUBLIC)
-            ))
-            text = (
-                f'#ПомилкаПублікуванняПоста\n\n'
-                f'Не зміг опубілкувати пост #{post.post_id} для {customer.username}\n\n'
-                f'<code>{error}</code>'
-            )
-            log.warning(text)
-            scheduler.add_job(
-                func=send_message, **date(), kwargs=dict(user_id=self.config.misc.error_channel_id,
-                                                         text=text, screenshot=screenshot)
-            )
+        # except Exception as Error:
+        #     self.close(browser)
+        #     error = self.error_to_html(Error)
+        #     scheduler.add_job(update_post, **date(), kwargs=dict(
+        #         post=post, params=dict(status=PostStatusEnum.PLAN_PUBLIC)
+        #     ))
+        #     text = (
+        #         f'#ПомилкаПублікуванняПоста\n\n'
+        #         f'Не зміг опубілкувати пост #{post.post_id} для {customer.username}\n\n'
+        #         f'<code>{error}; {button_name=}</code>'
+        #     )
+        #     log.warning(text)
+        #     scheduler.add_job(
+        #         func=send_message, **date(), kwargs=dict(user_id=self.config.misc.error_channel_id,
+        #                                                  text=text, screenshot=screenshot)
+        #     )
 
 
-async def test(scheduler: ContextSchedulerDecorator, session: sessionmaker):
-    from app.instagram.misc import database
-    db = database(session)
-    works = await db.work_db.get_work_status(WorkStatusEnum.ACTIVE)
+async def test(scheduler: ContextSchedulerDecorator, session: sessionmaker, controller: ProxyController):
+    controller.recheck_proxies()
+    # from app.instagram.misc import database
+    # db = database(session)
+    # works = await db.work_db.get_work_status(WorkStatusEnum.ACTIVE)
     # work = works[0]
-    # customer = await db.account_db.get_account(work.customer_id)
-    # executor = await db.account_db.get_account(work.executor_id)
-    # ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-    post = await db.post_db.get_post('CqaNsL1NXh1')
-    customer = await db.account_db.get_account(post.customer_id)
-    InstagramController().upload(customer, post, scheduler)
+    # post = await db.post_db.get_post('CdiRq_wKo21')
+    # tech = await db.account_db.get_account(1)
+    # customer = await db.account_db.get_account(5)
+    # InstagramController().upload(customer, post, scheduler)

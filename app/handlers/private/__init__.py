@@ -7,6 +7,7 @@ from . import add
 from . import posting
 from . import parsing
 from . import statistic
+from . import techniclas
 
 
 def setup(dp: Dispatcher):
@@ -17,5 +18,6 @@ def setup(dp: Dispatcher):
     posting.setup(dp)
     parsing.setup(dp)
     statistic.setup(dp)
+    techniclas.setup(dp)
 
 

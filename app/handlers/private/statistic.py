@@ -2,6 +2,7 @@ from aiogram import Dispatcher
 from aiogram.types import CallbackQuery
 from apscheduler_di import ContextSchedulerDecorator
 
+from app.database.models import Post
 from app.database.services.enums import PostStatusEnum
 from app.database.services.repos import AccountRepo, PostRepo
 from app.keyboard import Buttons
@@ -43,19 +44,26 @@ async def detail_statistic_cmd(call: CallbackQuery, callback_data: dict,
     customer_id = int(callback_data['account_id'])
     plan_download = await post_db.get_posts_customer(customer_id, PostStatusEnum.PLAN_DOWNLOAD)
     wait_public = await post_db.get_posts_customer(customer_id, PostStatusEnum.WAIT_PUBLIC)
+
+    plan_download = [post for post in plan_download if scheduler.get_job(post.job_id)]
+    plan_download.sort(key=lambda p: p.updated_at)
+
+    wait_public = [post for post in wait_public if scheduler.get_job(post.job_id)]
+    wait_public.sort(key=lambda p: p.updated_at)
+
     text = f'🗂 [Для публікації | {Buttons.accounts.statistic}]\n\n'
     if plan_download:
         text += '<b>⬇ Пости, що скоро скачаються</b>\n\n'
         for post, num in zip(plan_download[:5], range(1, 6)):
             job = scheduler.get_job(post.job_id)
             if job:
-                text += f'{num}. <b>{post.instagram_link()}</b> {job.next_run_time.strftime("%H:%M")}\n'
+                text += f'{num}. <b>{post.instagram_link()}</b> {job.next_run_time.strftime("%H:%M:%S")}\n'
     if wait_public:
         text += '\nПости, що скоро опублікуються\n'
         for post, num in zip(wait_public[:5], range(1, 6)):
             job = scheduler.get_job(post.job_id)
             if job:
-                text += f'{num}. <b>{post.instagram_link()}</b> Завантаження о {job.next_run_time.strftime("%H:%M")}\n'
+                text += f'{num}. <b>{post.instagram_link()}</b> {job.next_run_time.strftime("%H:%M:%S")}\n'
     await call.message.edit_text(text, reply_markup=back_keyboard(action='statistic', account_id=customer_id))
 
 

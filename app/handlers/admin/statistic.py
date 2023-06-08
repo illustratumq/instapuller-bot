@@ -183,7 +183,7 @@ async def plot_top_current_posts(ax: Axes, post_db: PostRepo):
     posts = {
         'Активні': len(post_active),
         'Планують скачування': len(post_plan_download),
-        'Завантажені': len(post_loading),
+        'Завантажуються': len(post_loading),
         'Планується публікація': len(post_plan_public),
         'Очікується публікація': len(post_wait_public),
         'Опубліковані': len(post_public)
