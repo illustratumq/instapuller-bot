@@ -10,13 +10,13 @@ from app import filters, handlers, middlewares
 from app.config import Config
 # from app.instagram.executors.setup import setup_executors
 from app.instagram.executors import setup_executors
-from app.instagram.technicals import TechnicalOneSetup
 from app.instagram.proxy import ProxyController
 from app.misc.bot_commands import set_default_commands
 from app.misc.notify_admins import notify
+from app.misc.one_time_setup import setup_function_setting
 from app.misc.scheduler import compose_scheduler
 from app.database.services.db_engine import create_db_engine_and_session_pool
-from app.instagram.uploader_v2 import test
+from app.instagram.uploader import test
 
 log = logging.getLogger(__name__)
 
@@ -44,18 +44,16 @@ async def main():
         scheduler=scheduler,
         controller=ProxyController()
     )
-    # ProxyController().recheck_proxies()
 
     middlewares.setup(dp, environments, sqlalchemy_session_pool)
     filters.setup(dp)
     handlers.setup(dp)
 
-    await TechnicalOneSetup().add_accounts_to_db(sqlalchemy_session_pool)
     await set_default_commands(bot)
-    await notify(bot, config)
+    await setup_function_setting(sqlalchemy_session_pool)
 
-    # await setup_executors(scheduler, ProxyController())
-    await test(scheduler, sqlalchemy_session_pool, ProxyController())
+    await setup_executors(scheduler, sqlalchemy_session_pool)
+    # await test(scheduler, sqlalchemy_session_pool, ProxyController())
 
     try:
         scheduler.start()

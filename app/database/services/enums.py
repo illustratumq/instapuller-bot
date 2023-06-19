@@ -39,3 +39,9 @@ class WorkStatusEnum(Enum):
 class UserStatusEnum(Enum):
     ACTIVE = 'ACTIVE'
     TRIAL = 'TRIAL'
+
+
+class FunctionStatusEnum(Enum):
+    ACTIVE = 'ACTIVE'
+    PAUSED = 'PAUSED'
+

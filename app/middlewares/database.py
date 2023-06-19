@@ -21,6 +21,9 @@ class DatabaseMiddleware(LifetimeControllerMiddleware):
         data['work_db'] = WorkRepo(session)
         data['account_db'] = AccountRepo(session)
         data['post_db'] = PostRepo(session)
+        data['proxy_db'] = ProxyRepo(session)
+        data['function_db'] = FunctionRepo(session)
+        data['error_db'] = ErrorRepo(session)
         data['session_pool'] = self.session_pool
         data['session'] = session
 

@@ -42,6 +42,7 @@ class TgBot:
 class Miscellaneous:
     log_level: int
     timezone: str
+    server_host_ip: str
     download_path: str
     auth_guide_link: str
     error_channel_id: int
@@ -85,6 +86,7 @@ class Config:
                 auth_guide_link=env.str('AUTH_GUIDE_LINK'),
                 error_channel_id=env.int('ERROR_CHANNEL_ID'),
                 error_sticker_id=env.str('ERROR_STICKER_ID'),
-                notify_admin=env.bool('NOTIFY_ADMIN')
+                notify_admin=env.bool('NOTIFY_ADMIN'),
+                server_host_ip=env.str('SERVER_HOST_IP')
             )
         )

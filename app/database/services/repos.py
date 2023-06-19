@@ -35,8 +35,11 @@ class AccountRepo(BaseRepo[Account]):
     async def get_accounts_by_user(self, user_id: int, account_type: AccountTypeEnum) -> list[Account]:
         return await self.get_all(self.model.user_id == user_id, self.model.type == account_type)
 
-    async def get_account_by_username(self, username: str, account_type: AccountTypeEnum) -> Account:
-        return await self.get_one(self.model.username == username, self.model.type == account_type)
+    async def get_account_by_username(self, username: str, account_type: AccountTypeEnum = None) -> Account:
+        if account_type:
+            return await self.get_one(self.model.username == username, self.model.type == account_type)
+        else:
+            return await self.get_one(self.model.username == username)
 
     async def get_free_technicals(self) -> list[Account]:
         accounts = await self.get_all(
@@ -115,6 +118,60 @@ class WorkRepo(BaseRepo[Work]):
         return await self.delete(self.model.work_id == work_id)
 
 
+class ProxyRepo(BaseRepo[Proxy]):
+
+    model = Proxy
+
+    async def get_proxy(self, proxy_id: int) -> Proxy:
+        return await self.get_one(self.model.id == proxy_id)
+
+    async def get_working_proxy(self, function_id, valid: bool = True) -> Proxy:
+        return await self.get_one(self.model.function_id == function_id, self.model.valid == valid)
+
+    async def get_proxy_statistic(self) -> str:
+        text = ''
+        proxies = await self.get_all()
+        for p, num in zip(proxies, range(1, len(proxies) + 1)):
+            marker = '🟢' if p.valid else '🟠'
+            text += f'{num}. {marker} {p.host}:{p.port}\n'
+        return text
+
+    async def update_proxy(self, proxy_id: int, **kwargs):
+        return await self.update(self.model.id == proxy_id, **kwargs)
+
+    async def delete_proxy(self, proxy_id: int):
+        return await self.delete(self.model.id == proxy_id)
+
+
+class FunctionRepo(BaseRepo[Function]):
+
+    model = Function
+
+    async def get_function(self, tag: str) -> Function:
+        return await self.get_one(self.model.tag == tag)
+
+    async def update_function(self, tag: str, **kwargs):
+        return await self.update(self.model.tag == tag, **kwargs)
+
+    async def delete_function(self, tag: str):
+        return await self.delete(self.model.tag == tag)
+
+
+class ErrorRepo(BaseRepo[Error]):
+
+    model = Error
+
+    async def get_error(self, error_id: int) -> Error:
+        return await self.get_one(self.model.id == error_id)
+
+    async def update_error(self, error_id: int, **kwargs):
+        return await self.update(self.model.id == error_id, **kwargs)
+
+    async def delete_error(self, error_id: int):
+        return await self.delete(self.model.id == error_id)
+
+
 __all__ = (
-    'AccountRepo', 'UserRepo', 'PostRepo', 'WorkRepo'
+    'AccountRepo', 'UserRepo', 'PostRepo', 'WorkRepo', 'ProxyRepo',
+    'FunctionRepo', 'ErrorRepo'
 )

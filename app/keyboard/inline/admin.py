@@ -17,11 +17,7 @@ def admin_kb():
         ],
         [
             InlineKeyboardButton(Buttons.admin.technicals, **button_cb('tech')),
-            InlineKeyboardButton(Buttons.admin.proxy, **button_cb('proxy'))
-        ],
-        [
             InlineKeyboardButton(Buttons.admin.download, **button_cb('download')),
-            InlineKeyboardButton(Buttons.admin.subscribe, **button_cb('sub'))
         ],
         [
             back_button(text='Назад'),

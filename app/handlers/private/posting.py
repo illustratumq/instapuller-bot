@@ -215,7 +215,7 @@ async def resume_cmd(call: CallbackQuery, callback_data: dict, account_db: Accou
 
 
 async def select_executor_work(call: CallbackQuery, callback_data: dict, account_db: AccountRepo, state: FSMContext):
-    await state.finish()
+    # await state.finish()
     customer_id = int(callback_data['account_id'])
     customer = await account_db.get_account(customer_id)
     data = await state.get_data()

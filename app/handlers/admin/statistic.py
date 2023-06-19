@@ -7,21 +7,22 @@ from aiogram.dispatcher.filters import Command
 from aiogram.types import Message, InputFile, CallbackQuery
 from matplotlib.axes import Axes
 
+from app.config import Config
 from app.database.models import Account
 from app.database.models.base import TimedBaseModel
 from app.database.services.enums import AccountTypeEnum, PostStatusEnum, UserStatusEnum, AccountStatusEnum
-from app.database.services.repos import AccountRepo, PostRepo, UserRepo
-from app.instagram.proxy import ProxyController
+from app.database.services.repos import AccountRepo, PostRepo, UserRepo, ProxyRepo
 from app.keyboard import Buttons
 from app.keyboard.inline.admin import admin_kb, admin_cb
 from app.keyboard.inline.menu import menu_cb
 from app.misc.times import now, localize
 import psutil
+
 plt.set_loglevel('WARNING')
 
 
 async def admin_cmd(call: CallbackQuery, account_db: AccountRepo, post_db: PostRepo,
-                    user_db: UserRepo, controller: ProxyController):
+                    user_db: UserRepo, proxy_db: ProxyRepo, config: Config):
     await call.message.delete()
     msg = await call.message.answer('Збираю статистику...')
     text = (
@@ -35,9 +36,12 @@ async def admin_cmd(call: CallbackQuery, account_db: AccountRepo, post_db: PostR
         f'📬 Пости:\n\n'
         f'<b>{await posts_statistic(post_db)}</b>\n\n'
         f'🌍 Проксі:\n\n'
-        f'{controller.proxy_statistic()}'
+        f'{await proxy_db.get_proxy_statistic()}\n\n'
+        f'<b>Адмін панель:</b> http://{config.misc.server_host_ip}:8000/admin'
     )
+    await msg.edit_text('Малюю графіки...')
     await matplotlib_data(post_db, account_db)
+    await msg.edit_text('Надсилаю...')
     await msg.bot.send_chat_action(call.from_user.id, 'upload_photo')
     await call.message.answer_photo(InputFile('statistic.png'), caption=text, reply_markup=admin_kb())
     await msg.delete()

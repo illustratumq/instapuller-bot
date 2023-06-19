@@ -18,6 +18,11 @@ async def select_accounts(call: CallbackQuery, account_db: AccountRepo):
     )
     await call.message.edit_text(text, reply_markup=select_accounts_kb)
 
+async def dev_cmd(call: CallbackQuery):
+    await call.answer('Вже скоро 💫')
+
 
 def setup(dp: Dispatcher):
     dp.register_callback_query_handler(select_accounts, menu_cb.filter(action='accounts'), state='*')
+    dp.register_callback_query_handler(dev_cmd, menu_cb.filter(action='subscript'), state='*')
+    dp.register_callback_query_handler(dev_cmd, menu_cb.filter(action='faq'), state='*')

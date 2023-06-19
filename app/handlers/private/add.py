@@ -9,9 +9,8 @@ from apscheduler_di import ContextSchedulerDecorator
 
 from app.config import Config
 from app.database.services.enums import AccountTypeEnum
-from app.database.services.repos import AccountRepo, Account
-from app.instagram.proxy import ProxyController
-from app.instagram.uploader_v2 import InstagramController
+from app.database.services.repos import AccountRepo, Account, FunctionRepo, ProxyRepo
+from app.instagram.uploader import InstagramController
 from app.keyboard.inline.accounts import add_account_kb, add_accounts_kb, add_account_confirm_kb, customer_add_kb
 from app.keyboard.inline.back import back_keyboard
 from app.keyboard.inline.menu import menu_cb
@@ -55,10 +54,11 @@ async def pre_checking_username(msg: Message, state: FSMContext):
 
 
 async def checking_instagram_username_parsing(call: CallbackQuery, state: FSMContext, account_db: AccountRepo,
-                                              scheduler: ContextSchedulerDecorator, config: Config,
-                                              controller: ProxyController):
+                                              function_db: FunctionRepo, proxy_db: ProxyRepo,
+                                              scheduler: ContextSchedulerDecorator, config: Config):
     await call.message.delete()
-    proxy = controller.get_working_proxy('register')
+    me = await function_db.get_function('add_account')
+    proxy = await proxy_db.get_working_proxy(function_id=me.id)
     if not proxy:
         text = (
             'Нажаль ми не можемо перевірити ваш акаунт на дійсність через тимчасову проблему '
@@ -66,7 +66,6 @@ async def checking_instagram_username_parsing(call: CallbackQuery, state: FSMCon
         )
         await call.message.answer_sticker(config.misc.error_sticker_id)
         return await call.message.answer(text)
-    proxy = controller.get_working_proxy('register')  # TODO
     data = await state.get_data()
     username = data['username']
     customers = await account_db.get_accounts_by_user(call.from_user.id, AccountTypeEnum.POSTING)
@@ -226,13 +225,14 @@ async def confirm_add_posting(call: CallbackQuery, state: FSMContext):
 
 
 async def checking_instagram_login_posting(call: CallbackQuery, state: FSMContext, account_db: AccountRepo,
-                                           scheduler: ContextSchedulerDecorator, config: Config,
-                                           controller: ProxyController):
+                                           function_db: FunctionRepo, proxy_db: ProxyRepo,
+                                           scheduler: ContextSchedulerDecorator, config: Config):
     await call.message.delete()
     data = await state.get_data()
     if scheduler.get_job(data['job_id']):
         scheduler.get_job(data['job_id']).remove()
-    proxy = controller.get_working_proxy('register')
+    me = await function_db.get_function('add_account')
+    proxy = await proxy_db.get_working_proxy(function_id=me.id)
     if not proxy:
         text = (
             'Нажаль ми не можемо перевірити ваш акаунт на дійсність через тимчасову проблему '
@@ -240,7 +240,6 @@ async def checking_instagram_login_posting(call: CallbackQuery, state: FSMContex
         )
         await call.message.answer_sticker(config.misc.error_sticker_id)
         return await call.message.answer(text)
-    proxy = controller.get_working_proxy('register')  # TODO
     username = data['username']
     password = data['password']
     auth_key = data['auth_key']

@@ -17,7 +17,7 @@ class Post(TimedBaseModel):
     status = sa.Column(ENUM(PostStatusEnum), default=PostStatusEnum.ACTIVE, nullable=False)
     caption = sa.Column(sa.VARCHAR(2200), nullable=True)
     mediacount = sa.Column(sa.INTEGER, nullable=False, default=0)
-    work_id = sa.Column(sa.BIGINT, nullable=False)
+    work_id = sa.Column(sa.BIGINT, nullable=True)
     job_id = sa.Column(sa.VARCHAR(40), nullable=True)
 
     def delete_me(self, config) -> None:

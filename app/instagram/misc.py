@@ -11,6 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from app.config import Config
 from app.database.models import Account, Post, Work
 from app.database.services.repos import *
+from app.database.services.repos import ErrorRepo
 from app.misc.times import localize, now
 
 
@@ -22,8 +23,11 @@ def run_time(next_run_time: datetime):
     return dict(trigger='date', next_run_time=next_run_time, misfire_grace_time=300)
 
 
-def interval(delay: int = 0, minutes: float = 1):
-    return dict(trigger='interval', seconds=int(minutes*60+delay), max_instances=2, misfire_grace_time=300)
+def interval(delay: int = 0, minutes: float = 1, reschedule: bool = False):
+    data = dict(trigger='interval', seconds=int(minutes * 60 + delay))
+    if not reschedule:
+        data.update(max_instances=2, misfire_grace_time=300)
+    return data
 
 
 class database:
@@ -45,6 +49,18 @@ class database:
     @property
     def user_db(self) -> UserRepo:
         return UserRepo(self.session)
+
+    @property
+    def error_db(self) -> ErrorRepo:
+        return ErrorRepo(self.session)
+
+    @property
+    def function_db(self) -> FunctionRepo:
+        return FunctionRepo(self.session)
+
+    @property
+    def proxy_db(self) -> ProxyRepo:
+        return ProxyRepo(self.session)
 
     async def close(self):
         await self.session.commit()
@@ -143,6 +159,10 @@ async def send_message(bot: Bot, user_id: int | list, text: str, screenshot: str
         else:
             await bot.send_message(user_id, text=text)
 
+async def create_error(session: sessionmaker, data: dict):
+    db = database(session)
+    await db.error_db.add(**data)
+    await db.close()
 
 async def update_account(session: sessionmaker, account: Account, params: dict):
     db = database(session)
