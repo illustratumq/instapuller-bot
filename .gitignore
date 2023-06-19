@@ -8,6 +8,7 @@ __pycache__/
 *.exe
 *.pkl
 *.json
+*.png
 
 # Environments
 .env
@@ -22,8 +23,4 @@ __pycache__/
 # Other
 redisdata/
 pgdata/
-pyrightconfig.json
-app/instagram/download
-app/instagram/cookies
-app/instagram/screenshots
 

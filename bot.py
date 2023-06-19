@@ -3,20 +3,20 @@ import logging
 
 import betterlogging as bl
 from aiogram import Bot, Dispatcher
-from aiogram.contrib.fsm_storage.redis import RedisStorage2, RedisStorage
+from aiogram.contrib.fsm_storage.redis import RedisStorage2
 from aiogram.types import AllowedUpdates, ParseMode
 
 from app import filters, handlers, middlewares
 from app.config import Config
+from app.database.services.db_engine import create_db_engine_and_session_pool
 # from app.instagram.executors.setup import setup_executors
 from app.instagram.executors import setup_executors
 from app.instagram.proxy import ProxyController
 from app.misc.bot_commands import set_default_commands
-from app.misc.notify_admins import notify
 from app.misc.one_time_setup import setup_function_setting
 from app.misc.scheduler import compose_scheduler
-from app.database.services.db_engine import create_db_engine_and_session_pool
-from app.instagram.uploader import test
+
+# from app.instagram.uploader import test
 
 log = logging.getLogger(__name__)
 
