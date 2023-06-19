@@ -260,7 +260,8 @@ class InstagramController:
     def login(self, account: Account, scheduler: ContextSchedulerDecorator,
               successful_end_func=None, error_end_func=None, kwargs: dict = None) -> webdriver.Chrome:
         screenshot = self.screen_path.format(account.username, now().strftime(self.format_time))
-        try:
+        # try:
+        if True:
             for attempt in (1, 2):
                 log.info(f'Логін в {account.username}. Спроба {attempt}/2')
                 self.set_browser()
@@ -320,41 +321,41 @@ class InstagramController:
                 if successful_end_func:
                     scheduler.add_job(successful_end_func, **date(), kwargs=kwargs)
                 return browser
-        except Exception as Error:
-            self.close(self.browser)
-            error = self.error_to_html(Error)
-            if 'session timed out or not found' in error:
-                pass
-            else:
-                text = (
-                    f'#ПомилкаВходуІнстаграм\n\n'
-                    f'Я не зміг увійтив ваш акаунт <b>{account.username}</b>\n\n<code>{error}</code>'
-                )
-                if account.type == AccountTypeEnum.TECHNICAL:
-                    user_id = self.config.misc.error_channel_id
-                else:
-                    user_id = [account.user_id, self.config.misc.error_channel_id]
-
-                error_data = dict(
-                    name='Помилка при вході в акаунт',
-                    description=f'Функція login\n\n{error}', customer_id=account.account_id,
-                    proxy_id=self.proxy.id, screenshot=screenshot
-                )
-
-                scheduler.add_job(
-                    name=f'Відправка повідомлення про помилку при вході в {account.username}',
-                    func=send_message, **date(), kwargs=dict(user_id=user_id, text=text, screenshot=screenshot)
-                )
-                scheduler.add_job(
-                    name=f'Оновлення статусту акаунту на "Забанений"', func=update_account, **date(7),
-                    kwargs=dict(account=account, params=dict(status=AccountStatusEnum.BANNED))
-                )
-                scheduler.add_job(
-                    name='Створення обєкту помилки', func=create_error, **date(9),
-                    kwargs=dict(data=error_data)
-                )
-                if error_end_func:
-                    scheduler.add_job(error_end_func, **date(10), kwargs=kwargs)
+        # except Exception as Error:
+        #     self.close(self.browser)
+        #     error = self.error_to_html(Error)
+        #     if 'session timed out or not found' in error:
+        #         pass
+        #     else:
+        #         text = (
+        #             f'#ПомилкаВходуІнстаграм\n\n'
+        #             f'Я не зміг увійтив ваш акаунт <b>{account.username}</b>\n\n<code>{error}</code>'
+        #         )
+        #         if account.type == AccountTypeEnum.TECHNICAL:
+        #             user_id = self.config.misc.error_channel_id
+        #         else:
+        #             user_id = [account.user_id, self.config.misc.error_channel_id]
+        #
+        #         error_data = dict(
+        #             name='Помилка при вході в акаунт',
+        #             description=f'Функція login\n\n{error}', customer_id=account.account_id,
+        #             proxy_id=self.proxy.id, screenshot=screenshot
+        #         )
+        #
+        #         scheduler.add_job(
+        #             name=f'Відправка повідомлення про помилку при вході в {account.username}',
+        #             func=send_message, **date(), kwargs=dict(user_id=user_id, text=text, screenshot=screenshot)
+        #         )
+        #         scheduler.add_job(
+        #             name=f'Оновлення статусту акаунту на "Забанений"', func=update_account, **date(7),
+        #             kwargs=dict(account=account, params=dict(status=AccountStatusEnum.BANNED))
+        #         )
+        #         scheduler.add_job(
+        #             name='Створення обєкту помилки', func=create_error, **date(9),
+        #             kwargs=dict(data=error_data)
+        #         )
+        #         if error_end_func:
+        #             scheduler.add_job(error_end_func, **date(10), kwargs=kwargs)
 
     def check_parsing_account(self, technicals: list[Account], username: str, scheduler: ContextSchedulerDecorator,
                               successful_end_func=None, error_end_func=None, kwargs: dict = None):

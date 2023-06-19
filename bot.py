@@ -13,7 +13,7 @@ from app.database.services.db_engine import create_db_engine_and_session_pool
 from app.instagram.executors import setup_executors
 from app.instagram.proxy import ProxyController
 from app.misc.bot_commands import set_default_commands
-from app.misc.one_time_setup import setup_function_setting
+from app.misc.one_time_setup import one_time_setup_data
 from app.misc.scheduler import compose_scheduler
 
 # from app.instagram.uploader import test
@@ -50,8 +50,8 @@ async def main():
     handlers.setup(dp)
 
     await set_default_commands(bot)
-    await setup_function_setting(sqlalchemy_session_pool)
-
+    await one_time_setup_data(sqlalchemy_session_pool, reset_from_json=True)
+    await asyncio.sleep(1)
     await setup_executors(scheduler, sqlalchemy_session_pool)
     # await test(scheduler, sqlalchemy_session_pool, ProxyController())
 

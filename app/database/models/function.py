@@ -13,6 +13,7 @@ class Function(TimedBaseModel):
     status = sa.Column(ENUM(FunctionStatusEnum), nullable=False, default=FunctionStatusEnum.PAUSED)
     minutes = sa.Column(sa.INTEGER, nullable=False, default=1)
     seconds = sa.Column(sa.INTEGER, nullable=False, default=0)
+    need_to_reload = sa.Column(sa.BOOLEAN, default=False, nullable=False)
     job_id = sa.Column(sa.VARCHAR(150), nullable=True)
 
     def if_paused_function(self):

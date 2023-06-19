@@ -1,5 +1,4 @@
-from datetime import datetime
-
+import django
 from django.db import models
 from django.forms import ModelForm, Textarea
 
@@ -165,8 +164,15 @@ class Function(TimedBaseModel):
     minutes = models.IntegerField(default=1, verbose_name='Хвилини', help_text='період активації функції')
     seconds = models.IntegerField(default=0, verbose_name='Секунди',
                                   help_text='період активації функції, додаються до хвилин')
+    need_to_reload = models.BooleanField(default=False)
     job_id = models.CharField(max_length=40, null=True, editable=False, verbose_name='Job ID',
                               help_text='технічна інформація про функцію')
+
+    def save(self, *args, **kwargs):
+        model = Function.objects.filter(id=self.id)[0]
+        if model.minutes != self.minutes or model.seconds != self.seconds:
+            self.need_to_reload = True
+        return super(Function, self).save()
 
     def __str__(self):
         return f'Функція {self.name}'
@@ -183,13 +189,19 @@ class Proxy(TimedBaseModel):
         (False, 'Не працює')
     )
 
+    ProxyTypeEnum = (
+        ('socks5', 'socks5'),
+        ('https', 'https'),
+        ('http', 'http')
+    )
+
     id = models.AutoField(primary_key=True, verbose_name='ID Проксі', db_column='id')
     function_id = models.ForeignKey(Function, on_delete=models.SET_NULL, null=True, verbose_name='Функція',
                                     help_text='оберіть в якій функції буде використовуватись проксі',
                                     related_name='prox_function_id', db_column='function_id')
     host = models.CharField(max_length=100, null=False, verbose_name='Хост')
     port = models.CharField(max_length=10, null=False, verbose_name='Порт')
-    type = models.CharField(max_length=100, null=False, verbose_name='Тип',
+    type = models.CharField(max_length=100, choices=ProxyTypeEnum, default='socks5', null=False, verbose_name='Тип',
                             help_text='доступні варіанти socks5, https, http')
     login = models.CharField(max_length=100, null=True, blank=True, verbose_name='Юзернейм',
                              help_text='для проксі з авторизацією')
@@ -197,7 +209,7 @@ class Proxy(TimedBaseModel):
                                 help_text='для проксі з авторизацією')
     valid = models.BooleanField(choices=ValidStatusEnum, default=False, verbose_name='Статус')
     reboot_url = models.CharField(max_length=255, null=True, verbose_name='Посилання на перезавантаженя', blank=True)
-    last_using_date = models.DateTimeField(default=datetime.now(), verbose_name='Дата останнього використання',
+    last_using_date = models.DateTimeField(default=django.utils.timezone.now, verbose_name='Дата останнього використання',
                                            null=False)
 
     def __str__(self):

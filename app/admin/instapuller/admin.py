@@ -216,7 +216,7 @@ class ProxyAdmin(admin.ModelAdmin):
             'fields': ('function_id', 'valid')
         }),
         ('Параметри проксі', {
-            'fields': (('host', 'port'), ('login', 'password'), 'reboot_url')
+            'fields': ('type', ('host', 'port'), ('login', 'password'), 'reboot_url')
         }),
         ('Дата створення та оновлення', {
             'fields': [('updated_at', 'created_at')]

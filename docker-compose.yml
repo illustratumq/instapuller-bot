@@ -2,23 +2,6 @@ version: "3.7"
 
 services:
 
-  django:
-    container_name: "django-admin-site"
-    build:
-      context: .
-    command: >
-      sh -c "
-        python ./app/admin/manage.py migrate --fake-initial &&
-        python ./app/admin/manage.py createsuperuser --noinput &&
-        python ./app/admin/manage.py runserver 0.0.0.0:8000"
-    ports:
-      - "8000:8000"
-    restart: unless-stopped
-    depends_on:
-      - bot
-    networks:
-      - botnet
-
   bot:
     container_name: "${BOT_NAME}-bot"
     build:
@@ -28,7 +11,15 @@ services:
     - ./app/instagram/download:/src/app/instagram/download
     - ./app/instagram/cookies:/src/app/instagram/cookies
     - ./app/instagram/screenshots:/src/app/instagram/screenshots
-    command: python -O bot.py
+    command: >
+      sh -c "
+        python ./app/admin/manage.py migrate --fake-initial &&
+        python ./app/admin/manage.py makemigrations instapuller &&
+        python ./app/admin/manage.py createsuperuser --noinput &&
+        python ./app/admin/manage.py runserver 0.0.0.0:8000 &&
+        python -O bot.py"
+    ports:
+      - "8000:8000"
     restart: unless-stopped
     env_file:
       - ".env"

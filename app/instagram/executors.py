@@ -33,7 +33,7 @@ async def setup_executors(scheduler: ContextSchedulerDecorator, session: session
     job3 = scheduler.add_job(public_posts_executor_v3, **interval(**ex3.time))
     job4 = scheduler.add_job(register_posts_executor_new, **interval(**ex4.time))
     job5 = scheduler.add_job(check_proxy_executor, **interval(**ex5.time))
-    scheduler.add_job(change_executors_period_function, **interval(minutes=0, delay=30))
+    scheduler.add_job(change_executors_period_function, **interval())
 
     await db.function_db.update_function('register_posts_executor', job_id=job1.id)
     await db.function_db.update_function('manage_posts_executor', job_id=job2.id)
@@ -44,6 +44,7 @@ async def setup_executors(scheduler: ContextSchedulerDecorator, session: session
 
 async def change_executors_period_function(session: sessionmaker, scheduler: ContextSchedulerDecorator):
     db = database(session)
+    paused_functions = []
     for tag in ['check_proxy_executor', 'register_posts_executor', 'manage_posts_executor',
                 'public_posts_executor', 'register_posts_executor_new']:
         me = await db.function_db.get_function(tag)
@@ -51,11 +52,14 @@ async def change_executors_period_function(session: sessionmaker, scheduler: Con
             if job := scheduler.get_job(me.job_id):
                 if me.if_paused_function():
                     job.pause()
-                    log.warning(f'[{tag}]: в статусі ПАУЗА')
+                    paused_functions.append(tag)
                 else:
                     job.resume()
-
+            if me.need_to_reload:
                 scheduler.reschedule_job(job.id, **interval(**me.time, reschedule=True))
+                await db.function_db.update_function(me.tag, need_to_reload=False)
+    log.info(f'Зупинено {len(paused_functions)} функцій {paused_functions}')
+
 
 async def register_posts_executor_new(session: sessionmaker, scheduler: ContextSchedulerDecorator):
     db = database(session)
@@ -390,5 +394,5 @@ async def check_proxy_executor(session: sessionmaker, scheduler: ContextSchedule
                                   func=update_proxy_status, kwargs=dict(proxy=proxy.id, data=data), **date())
 
     ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-    # ex.submit(check, await db.proxy_db.get_all(), session, scheduler)
-    check(await db.proxy_db.get_all(), session, scheduler)
+    ex.submit(check, await db.proxy_db.get_all(), session, scheduler)
+    await db.proxy_db.get_all(), session, scheduler
