@@ -186,6 +186,10 @@ class FunctionAdmin(admin.ModelAdmin):
         })
     )
 
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(Proxy)
 class ProxyAdmin(admin.ModelAdmin):
 
@@ -243,3 +247,7 @@ class ErrorAdmin(admin.ModelAdmin):
             'fields': [('updated_at', 'created_at')]
         })
     )
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
