@@ -112,7 +112,7 @@ class WorkRepo(BaseRepo[Work]):
         return await self.get_all(self.model.status == status)
 
     async def get_work_mode(self, mode: WorkModeEnum) -> list[Work]:
-        return await self.get_all(self.model.mode == mode)
+        return await self.get_all(self.model.mode == mode, self.model.status == WorkStatusEnum.ACTIVE)
 
     async def delete_work(self, work_id: int):
         return await self.delete(self.model.work_id == work_id)

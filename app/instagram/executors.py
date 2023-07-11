@@ -34,6 +34,7 @@ async def setup_executors(scheduler: ContextSchedulerDecorator, session: session
     job4 = scheduler.add_job(register_posts_executor_new, **interval(**ex4.time))
     job5 = scheduler.add_job(check_proxy_executor, **interval(**ex5.time))
     scheduler.add_job(change_executors_period_function, **interval())
+    scheduler.add_job(check_proxy_executor, **date(10))
 
     await db.function_db.update_function('register_posts_executor', job_id=job1.id)
     await db.function_db.update_function('manage_posts_executor', job_id=job2.id)
@@ -388,10 +389,15 @@ async def check_proxy_executor(session: sessionmaker, scheduler: ContextSchedule
 
     def check(proxies: list[db.proxy_db.model], session: sessionmaker, scheduler: ContextSchedulerDecorator):
         for proxy in proxies:
-            if not proxy.is_proxy_valid():
-                data = dict(valid=False)
-                scheduler.add_job(name='Оновлення статусу проксі',
-                                  func=update_proxy_status, kwargs=dict(proxy=proxy.id, data=data), **date())
+            if (now() - localize(proxy.last_using_date)).seconds > 120:
+                if not proxy.is_proxy_valid():
+                    data = dict(valid=False)
+                    scheduler.add_job(name='Оновлення статусу проксі [valid=False]',
+                                      func=update_proxy_status, kwargs=dict(proxy=proxy.id, data=data), **date())
+                else:
+                    data = dict(valid=True)
+                    scheduler.add_job(name='Оновлення статусу проксі [valid=True]',
+                                      func=update_proxy_status, kwargs=dict(proxy=proxy.id, data=data), **date())
 
     ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     ex.submit(check, await db.proxy_db.get_all(), session, scheduler)

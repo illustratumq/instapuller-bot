@@ -9,9 +9,9 @@ from aiogram.types import AllowedUpdates, ParseMode
 from app import filters, handlers, middlewares
 from app.config import Config
 from app.database.services.db_engine import create_db_engine_and_session_pool
-# from app.instagram.executors.setup import setup_executors
 from app.instagram.executors import setup_executors
 from app.instagram.proxy import ProxyController
+from app.instagram.uploader import test
 from app.misc.bot_commands import set_default_commands
 from app.misc.one_time_setup import one_time_setup_data
 from app.misc.scheduler import compose_scheduler
@@ -50,8 +50,7 @@ async def main():
     handlers.setup(dp)
 
     await set_default_commands(bot)
-    await one_time_setup_data(sqlalchemy_session_pool, reset_from_json=True)
-    await asyncio.sleep(1)
+    # await one_time_setup_data(sqlalchemy_session_pool, reset_from_json=True)
     await setup_executors(scheduler, sqlalchemy_session_pool)
     # await test(scheduler, sqlalchemy_session_pool, ProxyController())
 

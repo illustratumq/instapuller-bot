@@ -3,6 +3,7 @@ import logging
 import os
 import pickle
 import platform
+import socket
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -12,10 +13,12 @@ import pyotp
 import requests
 from apscheduler_di import ContextSchedulerDecorator
 from bs4 import BeautifulSoup, NavigableString
-from seleniumwire import webdriver
 from selenium.common import WebDriverException, NoSuchElementException
 from selenium.webdriver import Keys, ActionChains
+from seleniumwire import webdriver
 from sqlalchemy.orm import sessionmaker
+from telebot import TeleBot
+from telebot.types import InputFile
 
 from app.config import Config
 from app.database.models import Account, Proxy
@@ -88,19 +91,26 @@ class InstagramController:
         if Device.current() == Device.WINDOWS:
             self.browser = webdriver.Chrome(**self.windows_options(), executable_path='../../chromedriver.exe')
             log.info('Відкриваю Chrome на Windows...')
-            time.sleep(3)
+            time.sleep(1)
             self.browser.get('https://ipinfo.io/json')
             time.sleep(1)
             self.browser.refresh()
         else:
-            for i in range(4, 9):
+            for port in range(4, 9):
                 try:
-                    self.browser = webdriver.Remote(command_executor=f'http://selenoid:444{i}/wd/hub', **self.options())
+                    self.browser = webdriver.Remote(command_executor=f'http://selenoid:444{port}/wd/hub',
+                                                    **self.options(port))
+                    time.sleep(3)
+                    self.browser.get('https://ipinfo.io/jsonhttps://ipinfo.io/json')
+                    self.browser.save_screenshot('view.png')
+                    bot = TeleBot(self.config.bot.token)
+                    bot.send_photo(454793780, InputFile('view.png'))
+                    time.sleep(1)
                     break
-                except:
-                    log.error(f'Не зміг підключитись до порту: 444{i}')
+                except Exception as err:
+                    log.error(f'\nНе зміг підключитись до порту: 444{port}\n\n{err}\n')
 
-    def windows_options(self) -> dict:
+    def windows_options(self, **kwargs) -> dict:
         options = webdriver.ChromeOptions()
         options.add_argument("--lang=eng")
         options.add_argument('--ignore-certificate-errors')
@@ -109,7 +119,6 @@ class InstagramController:
         options.add_argument('--disable-blink-features=AutomationControlled')
         options.add_experimental_option('excludeSwitches', ['enable-logging'])
         options.add_experimental_option('excludeSwitches', ['enable-automation'])
-        options.add_argument('--disable-gpu')
 
         desired_capabilities = {
             'browserName': 'chrome',
@@ -121,12 +130,26 @@ class InstagramController:
 
         if self.proxy:
             self.proxy.reboot_proxy()
-            options = dict(proxy=self.proxy.to_dict())
-            result.update(seleniumwire_options=options)
+            wire_options = dict(proxy=self.proxy.to_dict())
+            result.update(seleniumwire_options=wire_options)
 
         return result
 
-    def options(self) -> dict:
+    @property
+    def container_local_ip(self) -> str:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        for addr, port in zip(['selenoid', 'selenoid', '0.0.0.0', '0.0.0.0'], [80, 4444, 80, 4444]):
+            try:
+                s.connect(('8.8.8.8', 80))
+                address = s.getsockname()[0]
+                log.warning(f'{addr} - {address}')
+            except:
+                log.error(f'{addr} fail')
+        s.connect(('8.8.8.8', 80))
+        address = s.getsockname()[0]
+        return address
+
+    def options(self, port: int) -> dict:
         options = webdriver.ChromeOptions()
         options.add_argument('--no-sandbox')
         options.add_argument("--lang=eng")
@@ -136,20 +159,30 @@ class InstagramController:
         options.add_argument('--disable-blink-features=AutomationControlled')
         options.add_experimental_option('excludeSwitches', ['enable-logging'])
         options.add_experimental_option('excludeSwitches', ['enable-automation'])
-        options.add_experimental_option("detach", True)
 
         desired_capabilities = {
             'browserName': 'chrome',
             'version': 'latest',
             'platform': 'LINUX',
+            'acceptSslCerts': True,
+            'selenoid:options': {
+                'enableVNC': True
+            }
         }
 
         result = dict(options=options, desired_capabilities=desired_capabilities)
 
+        wire_options = {
+            'connection_timeout': None,
+            'addr': self.container_local_ip,
+            'port': 4440 + port
+        }
+
         if self.proxy:
             self.proxy.reboot_proxy()
-            options = dict(proxy=self.proxy.to_dict())
-            result.update(seleniumwire_options=options)
+            wire_options.update(proxy=self.proxy.to_dict())
+
+        result.update(seleniumwire_options=wire_options)
 
         return result
 
@@ -260,8 +293,7 @@ class InstagramController:
     def login(self, account: Account, scheduler: ContextSchedulerDecorator,
               successful_end_func=None, error_end_func=None, kwargs: dict = None) -> webdriver.Chrome:
         screenshot = self.screen_path.format(account.username, now().strftime(self.format_time))
-        # try:
-        if True:
+        try:
             for attempt in (1, 2):
                 log.info(f'Логін в {account.username}. Спроба {attempt}/2')
                 self.set_browser()
@@ -321,41 +353,41 @@ class InstagramController:
                 if successful_end_func:
                     scheduler.add_job(successful_end_func, **date(), kwargs=kwargs)
                 return browser
-        # except Exception as Error:
-        #     self.close(self.browser)
-        #     error = self.error_to_html(Error)
-        #     if 'session timed out or not found' in error:
-        #         pass
-        #     else:
-        #         text = (
-        #             f'#ПомилкаВходуІнстаграм\n\n'
-        #             f'Я не зміг увійтив ваш акаунт <b>{account.username}</b>\n\n<code>{error}</code>'
-        #         )
-        #         if account.type == AccountTypeEnum.TECHNICAL:
-        #             user_id = self.config.misc.error_channel_id
-        #         else:
-        #             user_id = [account.user_id, self.config.misc.error_channel_id]
-        #
-        #         error_data = dict(
-        #             name='Помилка при вході в акаунт',
-        #             description=f'Функція login\n\n{error}', customer_id=account.account_id,
-        #             proxy_id=self.proxy.id, screenshot=screenshot
-        #         )
-        #
-        #         scheduler.add_job(
-        #             name=f'Відправка повідомлення про помилку при вході в {account.username}',
-        #             func=send_message, **date(), kwargs=dict(user_id=user_id, text=text, screenshot=screenshot)
-        #         )
-        #         scheduler.add_job(
-        #             name=f'Оновлення статусту акаунту на "Забанений"', func=update_account, **date(7),
-        #             kwargs=dict(account=account, params=dict(status=AccountStatusEnum.BANNED))
-        #         )
-        #         scheduler.add_job(
-        #             name='Створення обєкту помилки', func=create_error, **date(9),
-        #             kwargs=dict(data=error_data)
-        #         )
-        #         if error_end_func:
-        #             scheduler.add_job(error_end_func, **date(10), kwargs=kwargs)
+        except Exception as Error:
+            self.close(self.browser)
+            error = self.error_to_html(Error)
+            if 'session timed out or not found' in error:
+                pass
+            else:
+                text = (
+                    f'#ПомилкаВходуІнстаграм\n\n'
+                    f'Я не зміг увійтив ваш акаунт <b>{account.username}</b>\n\n<code>{error}</code>'
+                )
+                if account.type == AccountTypeEnum.TECHNICAL:
+                    user_id = self.config.misc.error_channel_id
+                else:
+                    user_id = [account.user_id, self.config.misc.error_channel_id]
+
+                error_data = dict(
+                    name='Помилка при вході в акаунт',
+                    description=f'Функція login\n\n{error}', customer_id=account.account_id,
+                    proxy_id=self.proxy.id, screenshot=screenshot
+                )
+
+                scheduler.add_job(
+                    name=f'Відправка повідомлення про помилку при вході в {account.username}',
+                    func=send_message, **date(), kwargs=dict(user_id=user_id, text=text, screenshot=screenshot)
+                )
+                scheduler.add_job(
+                    name=f'Оновлення статусту акаунту на "Забанений"', func=update_account, **date(7),
+                    kwargs=dict(account=account, params=dict(status=AccountStatusEnum.BANNED))
+                )
+                scheduler.add_job(
+                    name='Створення обєкту помилки', func=create_error, **date(9),
+                    kwargs=dict(data=error_data)
+                )
+                if error_end_func:
+                    scheduler.add_job(error_end_func, **date(10), kwargs=kwargs)
 
     def check_parsing_account(self, technicals: list[Account], username: str, scheduler: ContextSchedulerDecorator,
                               successful_end_func=None, error_end_func=None, kwargs: dict = None):
@@ -382,9 +414,6 @@ class InstagramController:
 
     def get_posts(self, technicals: list[Account],  executor: Account, work: Work,
                   scheduler: ContextSchedulerDecorator):
-        scheduler.add_job(
-            name=f'Оновлюю роботу для {executor.username}', func=update_work, **date(),
-            kwargs=dict(work=work, params=dict(status=WorkStatusEnum.DONE)))
         for technical in technicals:
             screenshot = self.screen_path.format(technical.username, now().strftime(self.format_time))
             browser = self.login(technical, scheduler)
@@ -446,7 +475,6 @@ class InstagramController:
                                 time.sleep(10)
                             else:
                                 browser.save_screenshot(screenshot)
-                                print(posts)
                                 log.info(f'Додаю +{len(posts)} скачаних постів з {executor.username}')
                                 scheduler.add_job(add_posts, **date(), kwargs=dict(work=work, shortcodes=posts))
                                 browser.execute_script(self.button.scroll)
@@ -829,10 +857,14 @@ class InstagramController:
 async def test(scheduler: ContextSchedulerDecorator, session: sessionmaker, controller: ProxyController):
     from app.instagram.misc import database
     db = database(session)
-    # account = await db.account_db.add(
-    #     user_id=454793780, username='illustratump',
-    #     password='ispm#345mkps'
-    # )
-    # work = await db.work_db.get_work(1)
-    # account = await db.account_db.get_account(2)
-    # InstagramController().get_posts([account], account, work, scheduler)
+    i = InstagramController(await db.proxy_db.get_proxy(2))
+    log.info('Відкриваю перший')
+    i.set_browser()
+    time.sleep(1)
+    i.close(i.browser)
+    time.sleep(1)
+    i = InstagramController(await db.proxy_db.get_proxy(2))
+    log.info('Відкриваю другий')
+    i.set_browser()
+    time.sleep(1)
+    i.close(i.browser)

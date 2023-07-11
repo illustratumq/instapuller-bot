@@ -31,7 +31,8 @@ class Proxy(TimedBaseModel):
             proxy_url = f'{self.type}://{self.host}:{self.port}'
         return {
             'http': proxy_url,
-            'https': proxy_url
+            'https': proxy_url,
+            'no_proxy': proxy_url
         }
 
     def is_proxy_valid(self) -> bool:
