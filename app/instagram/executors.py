@@ -1,5 +1,6 @@
 import concurrent.futures
 import logging
+
 from datetime import timedelta, datetime
 
 from apscheduler_di import ContextSchedulerDecorator
@@ -17,6 +18,7 @@ from app.misc.times import now, localize
 log = logging.getLogger(__name__)
 format_time = '%H:%M:%S %d.%m.%y'
 
+ex = concurrent.futures.ThreadPoolExecutor(max_workers=10)
 
 async def setup_executors(scheduler: ContextSchedulerDecorator, session: sessionmaker):
     scheduler.add_job(reset_posts_status, **date(10))
@@ -76,7 +78,7 @@ async def register_posts_executor_new(session: sessionmaker, scheduler: ContextS
         customer = await db.account_db.get_account(work.customer_id)
         if customer.status not in (AccountStatusEnum.PAUSE, AccountStatusEnum.BANNED):
             technicals.append(customer)
-            proxy = db.proxy_db.get_working_proxy(function_id=me.id)
+            proxy = await db.proxy_db.get_working_proxy(function_id=me.id)
             if not proxy:
                 return
             else:
@@ -92,10 +94,9 @@ async def run_register_post(session: sessionmaker, technicals: list[Account], ex
                             scheduler: ContextSchedulerDecorator):
     db = database(session)
     me = await db.function_db.get_function('register_posts_executor_new')
-    proxy = db.proxy_db.get_working_proxy(function_id=me.id)
+    proxy = await db.proxy_db.get_working_proxy(function_id=me.id)
     if not proxy:
         return
-    ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     ex.submit(InstagramController(proxy).get_posts, technicals, executor, work, scheduler)
 
 
@@ -126,7 +127,6 @@ async def register_posts_executor_v2(session: sessionmaker, scheduler: ContextSc
                 executor = await db.account_db.get_account(work.executor_id)
                 log_msg = f'Перевірка роботи для {customer.username} з {executor.username}'
                 log.warning(log_msg)
-                ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
                 ex.submit(InstagramController(proxy).get_posts, technicals, executor, work, scheduler)
                 return
     await db.close()
@@ -227,8 +227,8 @@ async def public_posts_executor_v3(session: sessionmaker, scheduler: ContextSche
             today_published_posts = [post for post in published_posts
                                      if localize(post.updated_at).strftime('%d.%m.%y') == now().strftime('%d.%m.%y')]
             need_to_public = customer.limit - len(wait_public_posts) - len(today_published_posts)
-            # log.warning(
-            #     f'{customer.limit} - {len(wait_public_posts)} - {len(today_published_posts)} = {need_to_public}')
+            log.warning(
+                f'{customer.limit} - {len(wait_public_posts)} - {len(today_published_posts)} = {need_to_public}')
 
             if need_to_public > 0:
                 if not post.is_am_downloaded(config) or post.mediacount == 0:
@@ -323,9 +323,7 @@ async def pre_download_post(session: sessionmaker, post: Post, scheduler: Contex
     else:
         technicals = await db.account_db.get_free_technicals()
         technicals.append(customer)
-        ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         ex.submit(InstagramController(proxy).download_post, technicals, post, scheduler)
-        #  TODO: set proxy
     await db.close()
 
 
@@ -336,11 +334,9 @@ async def pre_upload_post(session: sessionmaker, post: Post, scheduler: ContextS
     customer = await db.account_db.get_account(post.customer_id)
     if customer.status in (AccountStatusEnum.PAUSE, AccountStatusEnum.BANNED):
         await db.post_db.update_post(post.post_id, status=PostStatusEnum.PLAN_PUBLIC)
-        return
     elif not proxy:
         await db.post_db.update_post(post.post_id, status=PostStatusEnum.PLAN_PUBLIC)
     else:
-        ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         ex.submit(InstagramController(proxy).upload, customer, post, scheduler)
     await db.close()
 
@@ -351,6 +347,7 @@ async def reset_posts_status(session: sessionmaker, config: Config):
     posts_to_check += await db.post_db.get_posts_status(PostStatusEnum.LOADING)
     posts_to_check += await db.post_db.get_posts_status(PostStatusEnum.ACTIVE)
     posts_to_check += await db.post_db.get_posts_status(PostStatusEnum.WAIT_PUBLIC)
+    posts_to_check += await db.post_db.get_posts_status(PostStatusEnum.PLAN_PUBLIC)
     posts_to_update_count = 0
 
     for post in posts_to_check:
@@ -398,7 +395,4 @@ async def check_proxy_executor(session: sessionmaker, scheduler: ContextSchedule
                     data = dict(valid=True)
                     scheduler.add_job(name='Оновлення статусу проксі [valid=True]',
                                       func=update_proxy_status, kwargs=dict(proxy=proxy.id, data=data), **date())
-
-    ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     ex.submit(check, await db.proxy_db.get_all(), session, scheduler)
-    await db.proxy_db.get_all(), session, scheduler

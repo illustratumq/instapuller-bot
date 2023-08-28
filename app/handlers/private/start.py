@@ -29,7 +29,7 @@ async def start_cmd(msg: Message, user_db: UserRepo, config: Config, state: FSMC
             full_name=msg.from_user.full_name
         )
         await msg.answer(greeting_text, disable_web_page_preview=True)
-    admin = msg.from_user.id in config.bot.admin_ids or msg.from_user.is_bot
+    admin = msg.from_user.id in config.bot.admin_ids
     await msg.answer(text, reply_markup=menu_kb(admin))
 
 

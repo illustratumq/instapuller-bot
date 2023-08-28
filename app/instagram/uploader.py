@@ -15,7 +15,7 @@ from apscheduler_di import ContextSchedulerDecorator
 from bs4 import BeautifulSoup, NavigableString
 from selenium.common import WebDriverException, NoSuchElementException
 from selenium.webdriver import Keys, ActionChains
-from seleniumwire import webdriver
+from selenium import webdriver
 from sqlalchemy.orm import sessionmaker
 from telebot import TeleBot
 from telebot.types import InputFile
@@ -28,6 +28,7 @@ from app.instagram.misc import date, update_account, create_error
 from app.instagram.misc import send_message, update_work, add_posts, delete_post, update_post
 from app.instagram.proxy import ProxyController
 from app.misc.times import now
+
 
 log = logging.getLogger(__name__)
 logging.getLogger('seleniumwire').setLevel(logging.ERROR)
@@ -61,6 +62,11 @@ class Button:
     images_closed = {'name': 'div', 'class_': '_aagu _aa20 _aato'}
     image = {'name': 'div', 'class_': '_aagv'}
     videos = {'name': 'div', 'class_': '_ab1c'}
+    first_comment_username =  '_aacl _aaco _aacw _aacx _aad7 _aade'
+                              #('x9f619 xjbqb8w x1rg5ohu x168nmei x13lgxp2 x5pf9jr xo71vjh x1n2onr6 '
+                              # 'x1plvlek xryxfnj x1c4vz4f x2lah0s x1q0g3np xqjyukv x6s0dn4 x1oa3qoh x1nhvcw1')
+    caption = ('x193iq5w xeuugli x1fj9vlw x13faqbe x1vvkbs xt0psk2 '
+               'x1i0vuye xvs91rp xo1l8bm x5n08af x10wh9bi x1wdrske x8viiok x18hxmgj')
 
 
 class ErrorLoginInstagram(Exception):
@@ -101,7 +107,7 @@ class InstagramController:
                     self.browser = webdriver.Remote(command_executor=f'http://selenoid:444{port}/wd/hub',
                                                     **self.options(port))
                     time.sleep(3)
-                    self.browser.get('https://ipinfo.io/jsonhttps://ipinfo.io/json')
+                    self.browser.get('https://ipinfo.io/json')
                     self.browser.save_screenshot('view.png')
                     bot = TeleBot(self.config.bot.token)
                     bot.send_photo(454793780, InputFile('view.png'))
@@ -130,8 +136,14 @@ class InstagramController:
 
         if self.proxy:
             self.proxy.reboot_proxy()
-            wire_options = dict(proxy=self.proxy.to_dict())
-            result.update(seleniumwire_options=wire_options)
+            proxy_config = dict(proxyType='MANUAL')
+            proxy_string = f'{self.proxy.host}:{self.proxy.port}'
+            if 'socks5' in self.proxy.type:
+                proxy_config.update(socksVersion=5, socksProxy=proxy_string)
+            else:
+                proxy_config.update(httpProxy=proxy_string, frpProxy=proxy_string, sslProxy=proxy_string)
+            desired_capabilities.update(proxy=proxy_config)
+            result.update(desired_capabilities=desired_capabilities)
 
         return result
 
@@ -164,25 +176,20 @@ class InstagramController:
             'browserName': 'chrome',
             'version': 'latest',
             'platform': 'LINUX',
-            'acceptSslCerts': True,
-            'selenoid:options': {
-                'enableVNC': True
-            }
         }
 
         result = dict(options=options, desired_capabilities=desired_capabilities)
 
-        wire_options = {
-            'connection_timeout': None,
-            'addr': self.container_local_ip,
-            'port': 4440 + port
-        }
-
         if self.proxy:
             self.proxy.reboot_proxy()
-            wire_options.update(proxy=self.proxy.to_dict())
-
-        result.update(seleniumwire_options=wire_options)
+            proxy_config = dict(proxyType='MANUAL')
+            proxy_string = f'{self.proxy.host}:{self.proxy.port}'
+            if 'socks5' in self.proxy.type:
+                proxy_config.update(socksVersion=5, socksProxy=proxy_string)
+            else:
+                proxy_config.update(httpProxy=proxy_string, frpProxy=proxy_string, sslProxy=proxy_string)
+            desired_capabilities.update(proxy=proxy_config)
+            result.update(desired_capabilities=desired_capabilities)
 
         return result
 
@@ -293,101 +300,109 @@ class InstagramController:
     def login(self, account: Account, scheduler: ContextSchedulerDecorator,
               successful_end_func=None, error_end_func=None, kwargs: dict = None) -> webdriver.Chrome:
         screenshot = self.screen_path.format(account.username, now().strftime(self.format_time))
-        try:
-            for attempt in (1, 2):
-                log.info(f'Логін в {account.username}. Спроба {attempt}/2')
-                self.set_browser()
-                browser: webdriver.Chrome = self.browser
-                browser.get(self.login_url)
-                time.sleep(3)
-                browser.implicitly_wait(30)
-                browser.save_screenshot(screenshot)
-                allow_cookies = self.get_button(browser, 'Allow essential and optional cookies')
-                if allow_cookies:
-                    browser.execute_script('arguments[0].click();', allow_cookies)
-                if self.is_cookies_exist(account.username):
-                    self.get_cookies(browser, account.username)
+        for attempt in range(3):
+            state = 'set browser'
+            self.set_browser()
+            browser: webdriver.Chrome = self.browser
+            if not browser:
+                time.sleep(10)
+            else:
+                try:
+                    log.info(f'Логін в {account.username}. Спроба {attempt}/2')
+                    state = 'get login url'
+                    browser.get(self.login_url)
+                    time.sleep(3)
+                    browser.implicitly_wait(30)
                     browser.save_screenshot(screenshot)
+                    allow_cookies = self.get_button(browser, 'Allow essential and optional cookies')
+                    if allow_cookies:
+                        browser.execute_script('arguments[0].click();', allow_cookies)
+                    if self.is_cookies_exist(account.username):
+                        state = 'get cookies'
+                        self.get_cookies(browser, account.username)
+                        browser.save_screenshot(screenshot)
+                        time.sleep(5)
+                        browser.implicitly_wait(30)
+                        if not self.is_exist(*self.button.create) and self.get_button(browser, 'New post') is None:
+                            pass
+                        else:
+                            if os.path.isfile(screenshot):
+                                os.remove(screenshot)
+                            if successful_end_func:
+                                scheduler.add_job(successful_end_func, **date(), kwargs=kwargs)
+                            return browser
+                    state = 'login button'
+                    self.get_element_by_name(browser, 'Phone number, username', tag='input').send_keys(account.username)
+                    time.sleep(1)
+                    state = 'password button'
+                    self.get_element_by_name(browser, 'Password', tag='input').send_keys(account.password)
+                    time.sleep(1)
+                    self.get_button(browser, 'Log in').send_keys(Keys.ENTER)
                     time.sleep(5)
                     browser.implicitly_wait(30)
+                    browser.save_screenshot(screenshot)
+                    if self.is_exist(*self.button.error):
+                        error = browser.find_element(*self.button.error).text
+                        raise ErrorLoginInstagram(error)
+                    if account.auth_key:
+                        button = browser.find_element(*self.button.security)
+                        if button is not None:
+                            button.send_keys(self.get_auth_keycode(account.auth_key))
+                            self.click(*self.button.confirm, browser=browser)
+                            time.sleep(5)
+                            if not self.is_exist(*self.button.create) and self.get_button(browser, 'New post') is None:
+                                raise ErrorLoginInstagram('Бот не зміг увійти в ваш акаунт. Схоже ваш код двоетапної '
+                                                          'перевірки некоректний')
+                    browser.save_screenshot(screenshot)
+                    post_blocked = self.get_button(browser, 'OK')
+                    if post_blocked:
+                        post_blocked.send_keys(Keys.ENTER)
+                        time.sleep(2)
+                    self.confirmations(browser)
+                    time.sleep(2)
                     if not self.is_exist(*self.button.create) and self.get_button(browser, 'New post') is None:
+                        raise ErrorLoginInstagram('Бот не зміг увійти в ваш акаунт.')
+                    self.save_cookies(browser, account.username)
+                    log.info(f'Successfully login for {account.username}')
+                    os.remove(screenshot)
+                    if successful_end_func:
+                        scheduler.add_job(successful_end_func, **date(), kwargs=kwargs)
+                    return browser
+                except Exception as Error:
+                    self.close(self.browser)
+                    error = self.error_to_html(Error)
+                    if 'session timed out or not found' in error or error.strip() == 'Message:':
                         pass
                     else:
-                        if os.path.isfile(screenshot):
-                            os.remove(screenshot)
-                        if successful_end_func:
-                            scheduler.add_job(successful_end_func, **date(), kwargs=kwargs)
-                        return browser
-                self.get_element_by_name(browser, 'Phone number, username', tag='input').send_keys(account.username)
-                time.sleep(1)
-                self.get_element_by_name(browser, 'Password', tag='input').send_keys(account.password)
-                time.sleep(1)
-                self.get_button(browser, 'Log in').send_keys(Keys.ENTER)
-                time.sleep(5)
-                browser.implicitly_wait(30)
-                browser.save_screenshot(screenshot)
-                if self.is_exist(*self.button.error):
-                    error = browser.find_element(*self.button.error).text
-                    raise ErrorLoginInstagram(error)
-                if account.auth_key:
-                    button = browser.find_element(*self.button.security)
-                    if button is not None:
-                        button.send_keys(self.get_auth_keycode(account.auth_key))
-                        self.click(*self.button.confirm, browser=browser)
-                        time.sleep(5)
-                        if not self.is_exist(*self.button.create) and self.get_button(browser, 'New post') is None:
-                            raise ErrorLoginInstagram('Бот не зміг увійти в ваш акаунт. Схоже ваш код двоетапної '
-                                                      'перевірки некоректний')
-                browser.save_screenshot(screenshot)
-                post_blocked = self.get_button(browser, 'OK')
-                if post_blocked:
-                    post_blocked.send_keys(Keys.ENTER)
-                    time.sleep(2)
-                self.confirmations(browser)
-                time.sleep(2)
-                if not self.is_exist(*self.button.create) and self.get_button(browser, 'New post') is None:
-                    raise ErrorLoginInstagram('Бот не зміг увійти в ваш акаунт.')
-                self.save_cookies(browser, account.username)
-                log.info(f'Successfully login for {account.username}')
-                os.remove(screenshot)
-                if successful_end_func:
-                    scheduler.add_job(successful_end_func, **date(), kwargs=kwargs)
-                return browser
-        except Exception as Error:
-            self.close(self.browser)
-            error = self.error_to_html(Error)
-            if 'session timed out or not found' in error:
-                pass
-            else:
-                text = (
-                    f'#ПомилкаВходуІнстаграм\n\n'
-                    f'Я не зміг увійтив ваш акаунт <b>{account.username}</b>\n\n<code>{error}</code>'
-                )
-                if account.type == AccountTypeEnum.TECHNICAL:
-                    user_id = self.config.misc.error_channel_id
-                else:
-                    user_id = [account.user_id, self.config.misc.error_channel_id]
+                        text = (
+                            f'#ПомилкаВходуІнстаграм\n\n'
+                            f'Я не зміг увійтив ваш акаунт <b>{account.username}</b>\n\n<code>{error}</code>'
+                        )
+                        if account.type == AccountTypeEnum.TECHNICAL:
+                            user_id = self.config.misc.error_channel_id
+                        else:
+                            user_id = [account.user_id, self.config.misc.error_channel_id]
 
-                error_data = dict(
-                    name='Помилка при вході в акаунт',
-                    description=f'Функція login\n\n{error}', customer_id=account.account_id,
-                    proxy_id=self.proxy.id, screenshot=screenshot
-                )
+                        error_data = dict(
+                            name='Помилка при вході в акаунт',
+                            description=f'Функція login\n\n{error}\n\n{state=}', customer_id=account.account_id,
+                            proxy_id=self.proxy.id, screenshot=screenshot
+                        )
 
-                scheduler.add_job(
-                    name=f'Відправка повідомлення про помилку при вході в {account.username}',
-                    func=send_message, **date(), kwargs=dict(user_id=user_id, text=text, screenshot=screenshot)
-                )
-                scheduler.add_job(
-                    name=f'Оновлення статусту акаунту на "Забанений"', func=update_account, **date(7),
-                    kwargs=dict(account=account, params=dict(status=AccountStatusEnum.BANNED))
-                )
-                scheduler.add_job(
-                    name='Створення обєкту помилки', func=create_error, **date(9),
-                    kwargs=dict(data=error_data)
-                )
-                if error_end_func:
-                    scheduler.add_job(error_end_func, **date(10), kwargs=kwargs)
+                        scheduler.add_job(
+                            name=f'Відправка повідомлення про помилку при вході в {account.username}',
+                            func=send_message, **date(), kwargs=dict(user_id=user_id, text=text, screenshot=screenshot)
+                        )
+                        scheduler.add_job(
+                            name=f'Оновлення статусту акаунту на "Забанений"', func=update_account, **date(7),
+                            kwargs=dict(account=account, params=dict(status=AccountStatusEnum.BANNED))
+                        )
+                        scheduler.add_job(
+                            name='Створення обєкту помилки', func=create_error, **date(9),
+                            kwargs=dict(data=error_data)
+                        )
+                        if error_end_func:
+                            scheduler.add_job(error_end_func, **date(10), kwargs=kwargs)
 
     def check_parsing_account(self, technicals: list[Account], username: str, scheduler: ContextSchedulerDecorator,
                               successful_end_func=None, error_end_func=None, kwargs: dict = None):
@@ -420,7 +435,7 @@ class InstagramController:
             if browser:
                 try:
                     browser.get(self.profile_url.format(executor.username))
-                    time.sleep(5)
+                    time.sleep(10)
                     browser.implicitly_wait(5)
                     try:
                         current_media_count = int(browser.find_elements(
@@ -505,7 +520,7 @@ class InstagramController:
                     error_data = dict(
                         name='Помилка реєстрації постів',
                         description=f'Функція get_posts\n\n{error}', executor_id=executor.account_id,
-                        technical=technical.account_id, work_id=work.work_id,
+                        technical_id=technical.account_id, work_id=work.work_id,
                         proxy_id=self.proxy.id, screenshot=screenshot
                     )
                     scheduler.add_job(
@@ -521,13 +536,11 @@ class InstagramController:
     def get_caption(soup: BeautifulSoup):
         try:
             login = soup.find('div', class_='xt0psk2').text
-            under_post_text = soup.find_all('div', class_='_a9zr')
-            caption = ''
-            for text in under_post_text:
-                owner = text.find('a').text
-                if owner == login:
-                    caption = text.find(class_='_aacl _aaco _aacu _aacx _aad7 _aade')
-                    break
+            first_comment_username = soup.find('span', class_=Button.first_comment_username)
+            if login == first_comment_username.text:
+                caption = soup.find(class_=Button.caption)
+            else:
+                return
             answer = ''
             for letter in caption:
                 if str(letter) in ('<br>', '<br/>'):
@@ -537,7 +550,7 @@ class InstagramController:
             return answer
         except Exception as Error:
             log.warning(f'Помилка при копіюванні caption:\n{Error}\n')
-            return False
+            return ''
 
     @staticmethod
     def close(browser: webdriver.Chrome):
@@ -557,121 +570,134 @@ class InstagramController:
     def download_post(self, technicals: list[Account], post: Post, scheduler: ContextSchedulerDecorator):
         for technical in technicals:
             screenshot = self.screen_path.format(technical.username, now().strftime(self.format_time))
-            browser = self.login(technical, scheduler)
-            if browser:
-                try:
-                    scheduler.add_job(update_post, **date(), kwargs=dict(post=post,
-                                                                         params=dict(status=PostStatusEnum.LOADING)))
-                    log.info(f'Відкрив бразузер для {technical.username}...')
-                    browser.get(self.post_url.format(post.post_id))
-                    time.sleep(5)
-                    browser.implicitly_wait(5)
-                    if self.is_page_not_available(browser):
-                        scheduler.add_job(delete_post, **date(), kwargs=dict(post=post))
-                        browser.save_screenshot(screenshot)
-                        raise ErrorLoginInstagram('Сторінку не було знайдено')
-                    pre_media = []
-                    next_button = True
-                    soup = BeautifulSoup(browser.page_source, 'lxml')
-                    is_video_exist = False
-                    while next_button:
-                        browser.implicitly_wait(3)
-                        presentation = soup.find('div', class_='_aap0')
-                        if presentation:
-                            images = presentation.find_all('div', class_='_aagv')
-                        else:
-                            images = soup.find_all('div', class_='_aagv')[:1]
-                        logging.info(f'Count media: {len(pre_media)}')
-                        videos = soup.find_all(**self.button.videos)
-                        if len(images) > 0:
-                            for image in images:
-                                if image not in pre_media:
-                                    pre_media.append(image)
-                        if len(videos) > 0:
-                            for video in videos:
-                                if video not in pre_media:
-                                    pre_media.append(video)
+            attempt = 3
+            while attempt != 0:
+                state = 'login'
+                browser = self.login(technical, scheduler)
+                if browser:
+                    attempt = 0
+                    try:
+                        scheduler.add_job(update_post, **date(), kwargs=dict(post=post,
+                                                                             params=dict(status=PostStatusEnum.LOADING)))
+                        log.info(f'Відкрив бразузер для {technical.username}... [Спроба {4 - attempt}]')
+                        state = 'get post url'
+                        browser.get(self.post_url.format(post.post_id))
+                        time.sleep(5)
+                        browser.implicitly_wait(5)
+                        if self.is_page_not_available(browser):
+                            scheduler.add_job(delete_post, **date(), kwargs=dict(post=post))
+                            browser.save_screenshot(screenshot)
+                            raise ErrorLoginInstagram('Сторінку не було знайдено')
+                        pre_media = []
+                        next_button = True
                         soup = BeautifulSoup(browser.page_source, 'lxml')
-                        if self.is_video_exist(soup):
-                            is_video_exist = True
-                            break
-                        next_button = self.get_post_next_media_button(browser)
-                        if next_button:
-                            browser.execute_script('arguments[0].click();', next_button)
-                        time.sleep(3)
+                        is_video_exist = False
+                        while next_button:
+                            browser.implicitly_wait(3)
+                            presentation = soup.find('div', class_='_aap0')
+                            if presentation:
+                                images = presentation.find_all('div', class_='_aagv')
+                            else:
+                                images = soup.find_all('div', class_='_aagv')[:1]
+                            logging.info(f'Count media: {len(pre_media)}')
+                            videos = soup.find_all(**self.button.videos)
+                            if len(images) > 0:
+                                for image in images:
+                                    if image not in pre_media:
+                                        pre_media.append(image)
+                            if len(videos) > 0:
+                                for video in videos:
+                                    if video not in pre_media:
+                                        pre_media.append(video)
+                            soup = BeautifulSoup(browser.page_source, 'lxml')
+                            if self.is_video_exist(soup):
+                                is_video_exist = True
+                                break
+                            next_button = self.get_post_next_media_button(browser)
+                            if next_button:
+                                state = 'click next button'
+                                browser.execute_script('arguments[0].click();', next_button)
+                            time.sleep(3)
 
-                    browser.save_screenshot(screenshot)
-                    caption = self.get_caption(soup)
-                    media = []
-                    count = 1
+                        browser.save_screenshot(screenshot)
+                        caption = self.get_caption(soup)
+                        media = []
+                        count = 1
 
-                    if is_video_exist:
-                        params = {
-                            'query_hash': self.button.query_hash,
-                            'variables': json.dumps({'shortcode': post.post_id})
-                        }
-                        response = dict(requests.get(self.graphql_url, params=params,
-                                                     proxies=self.proxy.to_dict()).json())
-                        if response['status'] == 'fail':
-                            pass
+                        if is_video_exist:
+                            params = {
+                                'query_hash': self.button.query_hash,
+                                'variables': json.dumps({'shortcode': post.post_id})
+                            }
+                            state = 'make response'
+                            response = dict(requests.get(self.graphql_url, params=params,
+                                                         proxies=self.proxy.to_dict()).json())
+                            if response['status'] == 'fail':
+                                pass
+                            else:
+                                # if not caption:
+                                #     caption = response['data']['shortcode_media']['edge_media_to_caption']['edges']
+                                #     caption = caption[0]['node']['text'] if caption else ''
+                                #     pass
+                                if is_video_exist:
+                                    response = response['data']['shortcode_media']
+                                    if 'edge_sidecar_to_children' not in list(response.keys()):
+                                        video_url = response['video_url']
+                                        preview = response['display_url']
+                                        media.append(dict(content_type='photo', url=preview, count=count))
+                                        media.append(dict(content_type='video', url=video_url, count=count + 1))
+                                    else:
+                                        for edge in response['edge_sidecar_to_children']['edges']:
+                                            node = edge['node']
+                                            if node['is_video']:
+                                                media.append(dict(content_type='video', url=node['video_url'], count=count))
+                                            else:
+                                                media.append(
+                                                    dict(content_type='photo', url=node['display_resources'][-1]['src'],
+                                                         count=count))
+                                            count += 1
                         else:
-                            # if not caption:
-                            #   caption = response['data']['shortcode_media']['edge_media_to_caption']['edges']
-                            #   caption = caption[0]['node']['text'] if caption else ''
-                            #   pass
-                            if is_video_exist:
-                                response = response['data']['shortcode_media']
-                                if 'edge_sidecar_to_children' not in list(response.keys()):
-                                    video_url = response['video_url']
-                                    preview = response['display_url']
-                                    media.append(dict(content_type='photo', url=preview, count=count))
-                                    media.append(dict(content_type='video', url=video_url, count=count + 1))
-                                else:
-                                    for edge in response['edge_sidecar_to_children']['edges']:
-                                        node = edge['node']
-                                        if node['is_video']:
-                                            media.append(dict(content_type='video', url=node['video_url'], count=count))
-                                        else:
-                                            media.append(
-                                                dict(content_type='photo', url=node['display_resources'][-1]['src'],
-                                                     count=count))
-                                        count += 1
-                    else:
-                        for content in pre_media:
-                            content = content.find_all('img')[0].get('src')
-                            media.append(dict(content_type='photo', url=content, count=count))
-                            count += 1
-                    if os.path.isfile(screenshot):
-                        os.remove(screenshot)
-                    self.close(browser)
-                    self.download_media_list(media, caption, post, scheduler)
-                    return
-                except Exception as Error:
-                    self.close(browser)
-                    error = self.error_to_html(Error)
-                    error_data = dict(
-                        name='Помилка скачуванні поста',
-                        description=f'Функція download_post\n\n{error}',
-                        technical=technical.account_id, post=post.post_id,
-                        proxy_id=self.proxy.id, screenshot=screenshot
-                    )
-                    scheduler.add_job(
-                        update_post, **date(), kwargs=dict(post=post, params=dict(status=PostStatusEnum.ACTIVE))
-                    )
-                    scheduler.add_job(
-                        name='Створення обєкту помилки', func=create_error, **date(7),
-                        kwargs=dict(data=error_data)
-                    )
-                    text = (
-                        f'#ПомилкаСкачуванняПоста\n\n'
-                        f'Не зміг скачати пост #{post.post_id} (account: {post.customer_id}, work: {post.work_id})\n\n'
-                        f'<code>{error}</code>'
-                    )
-                    log.warning(text)
-                    scheduler.add_job(
-                        func=send_message, **date(), kwargs=dict(user_id=self.config.misc.error_channel_id,
-                                                                 text=text, screenshot=screenshot)
-                    )
+                            for content in pre_media:
+                                content = content.find_all('img')[0].get('src')
+                                media.append(dict(content_type='photo', url=content, count=count))
+                                count += 1
+                        if os.path.isfile(screenshot):
+                            os.remove(screenshot)
+                        self.close(browser)
+                        state = 'download media list'
+                        self.download_media_list(media, caption, post, scheduler)
+                        return
+                    except Exception as Error:
+                        self.close(browser)
+                        error = self.error_to_html(Error)
+                        log.error(error)
+                        error_data = dict(
+                            name='Помилка скачуванні поста',
+                            description=f'Функція download_post\n\n{error}\n{state=}',
+                            technical_id=technical.account_id, post_id=post.post_id,
+                            proxy_id=self.proxy.id, screenshot=screenshot
+                        )
+                        scheduler.add_job(
+                            update_post, **date(), kwargs=dict(post=post, params=dict(status=PostStatusEnum.ACTIVE))
+                        )
+                        scheduler.add_job(
+                            name='Створення обєкту помилки', func=create_error, **date(7),
+                            kwargs=dict(data=error_data)
+                        )
+                        text = (
+                            f'#ПомилкаСкачуванняПоста\n\n'
+                            f'Не зміг скачати пост #{post.post_id} (account: {post.customer_id}, work: {post.work_id})\n\n'
+                            f'<code>{error}</code>'
+                        )
+                        log.warning(text)
+                        scheduler.add_job(
+                            func=send_message, **date(), kwargs=dict(user_id=self.config.misc.error_channel_id,
+                                                                     text=text, screenshot=screenshot)
+                        )
+                else:
+                    log.info(f'Не зміг відкрити браузер для {technical.username}... [Спроба {4 - attempt}]')
+                    attempt -= 1
+                    time.sleep(3)
         scheduler.add_job(
             update_post, **date(), kwargs=dict(post=post, params=dict(status=PostStatusEnum.ACTIVE))
         )
@@ -714,7 +740,6 @@ class InstagramController:
 
     def check_post_shared_as_reels(self, browser: webdriver.Chrome):
         info = self.get_element_by_name(browser, 'OK', 'button')
-        time.sleep(5)
         if info:
             log.info(str(info))
             action = ActionChains(browser)
@@ -751,7 +776,7 @@ class InstagramController:
             browser.execute_script('arguments[0].click();', crop)
             time.sleep(2)
             browser.implicitly_wait(10)
-            original = self.get_element_by_name(browser, 'Original', tag='button')
+            original = self.get_element_by_name(browser, 'Original', tag='span', text=True)
             button_name = 'original'
             browser.execute_script('arguments[0].click();', original)
             time.sleep(2)
@@ -815,11 +840,11 @@ class InstagramController:
             action.move_to_element(click_area)
             action.click(on_element=click_area)
             action.perform()
-            time.sleep(2)
+            time.sleep(4)
             share_button = self.get_element_by_name(browser, 'Share', tag='div', reverse=True)
             button_name = 'share button'
             browser.execute_script('arguments[0].click();', share_button)
-            time.sleep(2)
+            time.sleep(4)
             self.close(browser)
             if os.path.isfile(screenshot):
                 os.remove(screenshot)
@@ -841,7 +866,7 @@ class InstagramController:
             error_data = dict(
                 name='Помилка публікуванні поста',
                 description=f'Функція upload ({button_name=})\n\n{error}',
-                customer_id=customer.account_id, post=post.post_id,
+                customer_id=customer.account_id, post_id=post.post_id,
                 proxy_id=self.proxy.id, screenshot=screenshot
             )
             scheduler.add_job(
@@ -854,17 +879,15 @@ class InstagramController:
             )
 
 
-async def test(scheduler: ContextSchedulerDecorator, session: sessionmaker, controller: ProxyController):
+async def test(scheduler: ContextSchedulerDecorator, session: sessionmaker):
     from app.instagram.misc import database
     db = database(session)
-    i = InstagramController(await db.proxy_db.get_proxy(2))
-    log.info('Відкриваю перший')
-    i.set_browser()
-    time.sleep(1)
-    i.close(i.browser)
-    time.sleep(1)
-    i = InstagramController(await db.proxy_db.get_proxy(2))
-    log.info('Відкриваю другий')
-    i.set_browser()
-    time.sleep(1)
-    i.close(i.browser)
+    account = await db.account_db.get_account(86)
+    proxy = await db.proxy_db.get_working_proxy(5)
+    post = await db.post_db.get_post('CprbpzHAgrY')
+    i = InstagramController(proxy=proxy)
+    # import concurrent.futures
+    # ex = concurrent.futures.ThreadPoolExecutor(max_workers=3)
+    # for o in range(3):
+    # ex.submit()
+    i.upload(account, post, scheduler)

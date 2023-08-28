@@ -8,6 +8,7 @@ from app.database.services.repos import AccountRepo, PostRepo
 from app.keyboard import Buttons
 from app.keyboard.inline.accounts import account_cb, update_statistic_kb
 from app.keyboard.inline.back import back_keyboard
+from app.misc.times import localize, now
 
 
 async def statistic_cmd(call: CallbackQuery, callback_data: dict, account_db: AccountRepo,
@@ -25,6 +26,8 @@ async def statistic_cmd(call: CallbackQuery, callback_data: dict, account_db: Ac
     loading_posts = await post_db.get_posts_customer(customer_id, PostStatusEnum.LOADING)
     wait_public_posts = await post_db.get_posts_customer(customer_id, PostStatusEnum.WAIT_PUBLIC)
     published_posts = await post_db.get_posts_customer(customer_id, PostStatusEnum.DONE)
+    published_posts_today = [post for post in published_posts
+                             if localize(post.updated_at).strftime('%d.%m.%y') == now().strftime('%d.%m.%y')]
     # paused_posts = await post_db.get_posts_customer(customer_id, PostStatusEnum.PAUSE)
 
     text = (
@@ -33,8 +36,9 @@ async def statistic_cmd(call: CallbackQuery, callback_data: dict, account_db: Ac
         f'Планується скачування: {len(plan_download_posts)} постів\n'
         f'Завантажується зараз: {len(loading_posts)} постів\n'
         f'Планується час публікації: {len(plan_public_posts)} постів\n'
-        f'Опублікуються сьогодні: {len(wait_public_posts)} постів\n'
-        f'Опубліковано за весь час: {len(published_posts)} постів\n'
+        f'Опублікуються сьогодні: {len(wait_public_posts)} постів\n\n'
+        f'Опубліковано сьогодні: {len(published_posts_today)} постів\n'
+        f'Опубліковано за весь час: {len(published_posts)} постів'
     )
     await msg.edit_text(text, reply_markup=update_statistic_kb(customer_id))
 

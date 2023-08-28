@@ -2,29 +2,28 @@ import os
 from datetime import timedelta
 
 import matplotlib.pyplot as plt
+import psutil
 from aiogram import Dispatcher
-from aiogram.dispatcher.filters import Command
-from aiogram.types import Message, InputFile, CallbackQuery
+from aiogram.types import InputFile, CallbackQuery, Message
 from matplotlib.axes import Axes
 
 from app.config import Config
-from app.database.models import Account
 from app.database.models.base import TimedBaseModel
 from app.database.services.enums import AccountTypeEnum, PostStatusEnum, UserStatusEnum, AccountStatusEnum
 from app.database.services.repos import AccountRepo, PostRepo, UserRepo, ProxyRepo
+from app.filters import IsAdminFilter
 from app.keyboard import Buttons
 from app.keyboard.inline.admin import admin_kb, admin_cb
 from app.keyboard.inline.menu import menu_cb
 from app.misc.times import now, localize
-import psutil
 
 plt.set_loglevel('WARNING')
 
 
 async def admin_cmd(call: CallbackQuery, account_db: AccountRepo, post_db: PostRepo,
-                    user_db: UserRepo, proxy_db: ProxyRepo, config: Config):
+                    user_db: UserRepo, proxy_db: ProxyRepo, config: Config, callback_data: dict):
     await call.message.delete()
-    msg = await call.message.answer('Збираю статистику...')
+    msg = await call.message.answer('Збираю статистику ⏳')
     text = (
         f'[Панель адміністратора | {Buttons.accounts.statistic}]\n\n'
         f'🖥 Дані з серверу:\n\n'
@@ -39,19 +38,24 @@ async def admin_cmd(call: CallbackQuery, account_db: AccountRepo, post_db: PostR
         f'{await proxy_db.get_proxy_statistic()}\n\n'
         f'<b>Адмін панель:</b> http://{config.misc.server_host_ip}:8000/admin'
     )
-    await msg.edit_text('Малюю графіки...')
-    await matplotlib_data(post_db, account_db)
-    await msg.edit_text('Надсилаю...')
-    await msg.bot.send_chat_action(call.from_user.id, 'upload_photo')
-    await call.message.answer_photo(InputFile('statistic.png'), caption=text, reply_markup=admin_kb())
-    await msg.delete()
-    os.remove('statistic.png')
+    if 'draw' in callback_data['action']:
+        await matplotlib_data(post_db, account_db, msg)
+        await msg.edit_text('Надсилаю...')
+        await msg.bot.send_chat_action(call.from_user.id, 'upload_photo')
+        await call.message.answer_photo(InputFile('statistic.png'), caption=text,
+                                        reply_markup=admin_kb(with_draw=True))
+        await msg.delete()
+        os.remove('statistic.png')
+    else:
+        await call.message.answer(text=text, reply_markup=admin_kb())
+        await msg.delete()
 
 
 def setup(dp: Dispatcher):
-    dp.register_callback_query_handler(admin_cmd, menu_cb.filter(action='admin'), state='*')
-    dp.register_callback_query_handler(admin_cmd, admin_cb.filter(action='update'), state='*')
-
+    dp.register_callback_query_handler(admin_cmd, IsAdminFilter(), admin_cb.filter(action='draw'), state='*')
+    dp.register_callback_query_handler(admin_cmd, IsAdminFilter(), menu_cb.filter(action='admin'), state='*')
+    dp.register_callback_query_handler(admin_cmd, IsAdminFilter(), admin_cb.filter(action='update'), state='*')
+    dp.register_callback_query_handler(admin_cmd, IsAdminFilter(), admin_cb.filter(action='update_draw'), state='*')
 
 async def posts_statistic(post_db: PostRepo):
     post_active = len(await post_db.get_posts_status(PostStatusEnum.ACTIVE))
@@ -100,7 +104,7 @@ def memory_usage():
     return f'доступно {memory_available}/{memory_total} Гб'
 
 
-async def matplotlib_data(post_db: PostRepo, account_db: AccountRepo):
+async def matplotlib_data(post_db: PostRepo, account_db: AccountRepo, msg: Message):
     plt.rcParams['font.family'] = 'serif'
     plt.rcParams['font.serif'] = ['Times New Roman'] + plt.rcParams['font.serif']
     plt.rcParams.update({'font.size': 13})
@@ -108,9 +112,17 @@ async def matplotlib_data(post_db: PostRepo, account_db: AccountRepo):
     ax1 = plt.subplot2grid((2, 2), (0, 0))
     ax2 = plt.subplot2grid((2, 2), (1, 0))
     ax3 = plt.subplot2grid((2, 2), (0, 1), rowspan=2)
+    await msg.edit_text(
+        'Малюю графіки\n\nСтатистика загальних постів ⏳\nСтатистика за сьогодні ⏳\nТаблиця акаунтів ⏳')
     await plot_top_current_posts(ax1, post_db)
+    await msg.edit_text(
+        'Малюю графіки\n\nСтатистика загальних постів ✅\nСтатистика за сьогодні ⏳\nТаблиця акаунтів ⏳')
     await plot_posts_statistic(ax2, post_db)
+    await msg.edit_text(
+        'Малюю графіки\n\nСтатистика загальних постів ✅\nСтатистика за сьогодні ✅\nТаблиця акаунтів ⏳')
     await plot_table_account(ax3, account_db, post_db)
+    await msg.edit_text(
+        'Малюю графіки\n\nСтатистика загальних постів ✅\nСтатистика за сьогодні ✅\nТаблиця акаунтів ✅')
     plt.savefig('statistic.png')
 
 

@@ -2,6 +2,7 @@ from aiogram import Bot
 from apscheduler.executors.asyncio import AsyncIOExecutor
 from apscheduler.executors.base import BaseExecutor
 from apscheduler.executors.pool import ThreadPoolExecutor
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler_di import ContextSchedulerDecorator
 from sqlalchemy.orm import sessionmaker
@@ -20,7 +21,10 @@ def _configure_executors() -> dict[str, BaseExecutor]:
 def compose_scheduler(config: Config, bot: Bot, session: sessionmaker) -> ContextSchedulerDecorator:
     scheduler = ContextSchedulerDecorator(AsyncIOScheduler(
         executors=_configure_executors(),
-        timezone=str(get_localzone())
+        timezone=str(get_localzone()),
+        # jobstores={
+        #     'default': SQLAlchemyJobStore(url='sqlite:///jobs.sqlite')
+        # }
     ))
     scheduler.ctx.add_instance(bot, Bot)
     scheduler.ctx.add_instance(session, sessionmaker)

@@ -6,6 +6,10 @@ menu_cb = CallbackData('menu', 'action')
 config = Config.from_env()
 
 
+def help_kb():
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(Buttons.menu.help, url='https://t.me/instapuller_support')]])
+
 def menu_kb(admin: bool = False):
     inline_keyboard = [
         [
@@ -21,7 +25,11 @@ def menu_kb(admin: bool = False):
         ]
     ]
     if admin:
-        inline_keyboard[-1] = [InlineKeyboardButton(Buttons.menu.admin, callback_data=menu_cb.new(action='admin'))]
+        del inline_keyboard[-1]
+        inline_keyboard += [
+            [InlineKeyboardButton(Buttons.menu.admin, callback_data=menu_cb.new(action='admin'))],
+            [InlineKeyboardButton(Buttons.admin.web, url=f'http://{config.misc.server_host_ip}:8000/admin')]
+        ]
     return InlineKeyboardMarkup(
         row_width=2,
         inline_keyboard=inline_keyboard

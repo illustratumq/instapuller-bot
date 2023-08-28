@@ -56,15 +56,13 @@ class Proxy(TimedBaseModel):
     def reboot_proxy(self) -> bool:
         if self.reboot_url:
             try:
-                response = requests.get(self.reboot_url, timeout=10)
-                if response.json()['result'] == 'good':
-                    log.warning(f'[Перезагрузка проксі успішна] {self.host}:{self.port}')
-                    time.sleep(10)
+                requests.get(self.reboot_url)
+                time.sleep(10)
             except requests.exceptions.ConnectionError:
                 log.error(f'[Перезагрузка проксі НЕ успішна] {self.host}:{self.port}')
                 return False
             except requests.exceptions.ContentDecodingError:
                 log.error(f'[Перезагрузка проксі НЕ успішна] не зчитана відповідь JSON {self.host}:{self.port}')
                 return False
-            except Exception:
+            except Exception as Error:
                 return False

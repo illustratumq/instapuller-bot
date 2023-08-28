@@ -6,7 +6,7 @@ from app.keyboard.inline.base import *
 admin_cb = CallbackData('adm', 'action', 'user_id', 'account_id')
 
 
-def admin_kb():
+def admin_kb(with_draw: bool = False):
 
     def button_cb(action: str):
         return dict(callback_data=admin_cb.new(action=action, user_id=0, account_id=0))
@@ -14,6 +14,7 @@ def admin_kb():
     inline_keyboard = [
         [
             InlineKeyboardButton(Buttons.admin.root, **button_cb('root')),
+            InlineKeyboardButton(Buttons.admin.draw, **button_cb('draw'))
         ],
         [
             InlineKeyboardButton(Buttons.admin.technicals, **button_cb('tech')),
@@ -21,7 +22,7 @@ def admin_kb():
         ],
         [
             back_button(text='Назад'),
-            InlineKeyboardButton(Buttons.admin.update, **button_cb('update'))
+            InlineKeyboardButton(Buttons.admin.update, **button_cb('update_draw' if with_draw else 'update'))
         ]
     ]
 

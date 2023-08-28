@@ -47,12 +47,21 @@ async def main():
 
     middlewares.setup(dp, environments, sqlalchemy_session_pool)
     filters.setup(dp)
-    handlers.setup(dp)
+    handlers.setup(dp, config)
 
     await set_default_commands(bot)
+
+    #  One time setup:
     # await one_time_setup_data(sqlalchemy_session_pool, reset_from_json=True)
-    await setup_executors(scheduler, sqlalchemy_session_pool)
-    # await test(scheduler, sqlalchemy_session_pool, ProxyController())
+
+    #  Setup executors or test function:
+
+    if not config.misc.technical_pause:
+        log.info('Запуск екзекуторів...')
+        await setup_executors(scheduler, sqlalchemy_session_pool)
+    else:
+        log.info('Запуск тесту....')
+        await test(scheduler, sqlalchemy_session_pool)
 
     try:
         scheduler.start()

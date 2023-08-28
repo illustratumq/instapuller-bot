@@ -37,7 +37,9 @@ class Accounts:
 
 @dataclass
 class Admin:
+    web: str = '💫 Веб адмінка'
     technicals: str = '🤖 Технічні акаунти'
+    draw: str = '📊 Малювати графіки'
     download: str = '🗂 Скачати Excel'
     subscribe: str = '💳 Підписка'
     update: str = 'Оновити'

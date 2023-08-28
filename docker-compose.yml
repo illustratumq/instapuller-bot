@@ -13,14 +13,14 @@ services:
     - ./app/instagram/screenshots:/src/app/instagram/screenshots
     command: >
       sh -c "
-        python ./app/admin/manage.py migrate --fake-initial &&
-        python ./app/admin/manage.py makemigrations instapuller &&
-        python ./app/admin/manage.py createsuperuser --noinput &&
-        python ./app/admin/manage.py runserver 0.0.0.0:8000 &&
+        #python ./app/admin/manage.py migrate --fake-initial &&
+        #python ./app/admin/manage.py makemigrations instapuller &&
+        #python ./app/admin/manage.py createsuperuser --noinput &&
+        python ./app/admin/manage.py runserver 0.0.0.0:8000&
         python -O bot.py"
+    restart: unless-stopped
     ports:
       - "8000:8000"
-    restart: unless-stopped
     env_file:
       - ".env"
     environment:
@@ -31,7 +31,7 @@ services:
       - redis
       - selenoid
     networks:
-      - botnet
+     - botnet
 
   redis:
     container_name: "${BOT_NAME}-redis"
@@ -80,7 +80,7 @@ services:
     networks:
       - botnet
     ports:
-      - "4444-4448:4444"
+      - "4444:4444"
     restart: always
     volumes:
       - "./selenoid:/src/selenoid"
@@ -94,4 +94,4 @@ services:
 networks:
   botnet:
     name: botnet
-    driver: bridge
+    

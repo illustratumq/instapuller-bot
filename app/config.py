@@ -48,6 +48,7 @@ class Miscellaneous:
     error_channel_id: int
     error_sticker_id: int
     notify_admin: bool
+    technical_pause: bool
 
 
 @dataclass
@@ -87,6 +88,7 @@ class Config:
                 error_channel_id=env.int('ERROR_CHANNEL_ID'),
                 error_sticker_id=env.str('ERROR_STICKER_ID'),
                 notify_admin=env.bool('NOTIFY_ADMIN'),
-                server_host_ip=env.str('SERVER_HOST_IP')
+                server_host_ip=env.str('SERVER_HOST_IP'),
+                technical_pause=env.bool('TECHNICAL_PAUSE')
             )
         )

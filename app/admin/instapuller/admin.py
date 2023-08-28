@@ -116,7 +116,7 @@ class PostAdmin(admin.ModelAdmin):
     search_fields = ('post_id__startswith', 'user_id__startswith', 'customer_id__startswith',
                      'executor_id__startswith', 'work_id__startswith')
     readonly_fields = ('created_at', 'updated_at', 'job_id')
-    ordering = ['-updated_at']
+    ordering = ['-updated_at', '-customer_id']
     autocomplete_fields = ('user_id', 'customer_id', 'executor_id', 'work_id')
 
     def view_user_link(self, obj):
@@ -216,7 +216,7 @@ class ProxyAdmin(admin.ModelAdmin):
             'fields': ('function_id', 'valid')
         }),
         ('Параметри проксі', {
-            'fields': ('type', ('host', 'port'), ('login', 'password'), 'reboot_url')
+            'fields': ('type', ('host', 'port'),  'reboot_url')  # ('login', 'password'),
         }),
         ('Дата створення та оновлення', {
             'fields': [('updated_at', 'created_at')]
@@ -226,9 +226,9 @@ class ProxyAdmin(admin.ModelAdmin):
 @admin.register(Error)
 class ErrorAdmin(admin.ModelAdmin):
 
-    list_display = ('name', 'description', 'updated_at')
+    list_display = ('name', 'description', 'customer_id', 'updated_at')
     list_filter = ('name',)
-    search_fields = ('name__startswith', )
+    search_fields = ('name__startswith',)
     readonly_fields = ('created_at', 'updated_at', 'name', 'description', 'customer_id',
                        'executor_id', 'technical_id', 'proxy_id', 'work_id', 'screenshot', 'id')
     ordering = ['-updated_at']
